@@ -270,7 +270,7 @@ export default function Home() {
               )}
             </div>
             {tab === "work" && state.draft && !state.running && (
-              <FollowUp facts={state.facts} onAsk={askFollowUp} />
+              <FollowUp facts={state.facts} open={state.openQuestions} onAsk={askFollowUp} />
             )}
           </main>
           <RightRail
@@ -891,13 +891,16 @@ function ActivityFeed({
 
 function FollowUp({
   facts,
+  open: openQuestions,
   onAsk,
 }: {
   facts?: { summary?: string; missing?: string[] };
+  open?: string[];
   onAsk: (q: string) => void;
 }) {
   const [q, setQ] = useState("");
-  const open = (facts?.missing ?? []).slice(0, 4);
+  // prefer the post-analysis questions; fall back to intake's first-pass list
+  const open = (openQuestions?.length ? openQuestions : facts?.missing ?? []).slice(0, 4);
   return (
     <div className="border-t border-[var(--line)] bg-[var(--panel-2)] p-4">
       {open.length > 0 && (

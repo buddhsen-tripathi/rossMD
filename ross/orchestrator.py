@@ -362,12 +362,34 @@ class Orchestrator:
                                      bb["adversary"], harvey_fixes=harvey.get("fixes"))
         bb["draft"] = draft
         bb["harvey"] = harvey
+        # refine the "what would tighten this" questions from the COMPLETE record
+        bb["open_questions"] = await self.open_questions(bb)
 
         await self._persist(run_id, scenario, bb)
         await self._event("orchestrator", "run_done", {"run_id": run_id})
         await self.llm.aclose()
         await flush_dd()  # make sure observability posts land before we return
         return bb
+
+    async def open_questions(self, bb: dict) -> list[str]:
+        """Post-analysis: the highest-leverage facts/documents still needed,
+        synthesized from the WHOLE record (not just intake's first guesses)."""
+        await self._event("orchestrator", "open_questions_start", {})
+        user = json.dumps({
+            "intake_missing": (bb.get("facts") or {}).get("missing_facts", []),
+            "denial": (bb.get("facts") or {}).get("denial"),
+            "issues": [i.get("label") for i in bb.get("issues", [])],
+            "research_gaps": [{"issue": r.get("issue_id"), "bottom_line": r.get("bottom_line"),
+                               "against_us": r.get("against_us")} for r in bb.get("research", [])],
+            "adversary_attacks": (bb.get("adversary") or {}).get("attacks"),
+            "harvey_fixes": (bb.get("harvey") or {}).get("fixes"),
+            "posture": (bb.get("theory") or {}).get("posture"),
+        })
+        res = await self.llm.complete_json(
+            agent="orchestrator", system=prompts.OPEN_QUESTIONS, user=user, max_tokens=1200)
+        qs = [q for q in res.get("open_questions", []) if isinstance(q, str)][:5]
+        await self._event("orchestrator", "open_questions", {"questions": qs})
+        return qs
 
     async def _persist(self, run_id, scenario, bb):
         try:

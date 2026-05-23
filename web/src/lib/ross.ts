@@ -45,6 +45,7 @@ export type RossState = {
   draft?: { doc_type?: string; title?: string; body_markdown?: string };
   harvey: { round?: number; verdict?: string; one_liner: string; fixes?: string[]; assessment?: string };
   harveyLog: string[];
+  openQuestions?: string[]; // post-analysis "what would tighten this" (supersedes intake's)
   tokens: number;
   log: RossEvent[];
 };
@@ -132,6 +133,9 @@ function reduce(s: RossState, ev: RossEvent): RossState {
       break;
     case "orchestrator/harvey_reject":
       n.agents = { ...n.agents, drafter: "reject" };
+      break;
+    case "orchestrator/open_questions":
+      n.openQuestions = payload.questions ?? [];
       break;
     case "orchestrator/run_done":
       n.running = false;

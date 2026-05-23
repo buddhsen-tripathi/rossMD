@@ -154,6 +154,21 @@ Return JSON:
 Prefer clickhouse when the corpus already covers it. Reach for web specifically
 when a payer's current policy or a fresh external source decides the issue."""
 
+OPEN_QUESTIONS = HOUSE + """
+
+ROLE: After the FULL analysis is done — research, strategy, the adversary's
+attacks, and Harvey's review — name the few highest-leverage FACTS or DOCUMENTS
+the attorney should provide to make this work product airtight. This is the
+COMPLETE-record view, not the first-pass intake guesses: weigh what actually
+turned out to matter — the documentation the adversary would exploit, anything
+research marked [needs verification], Harvey's fixes, and the open intake
+questions that are still live. Drop anything the analysis already resolved.
+
+Each item is a short, concrete ask phrased as a chip (what to hand Ross next),
+ordered most-decisive-first.
+
+Return JSON: { "open_questions": [str] }   // 3-5 items, concise"""
+
 STRATEGIST = HOUSE + """
 
 ROLE: STRATEGIST. You have the facts, the spotted issues, and the researchers'
