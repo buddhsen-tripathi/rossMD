@@ -34,6 +34,15 @@ export default function RootLayout({
       lang="en"
       className={`${geistSans.variable} ${geistMono.variable} ${fraunces.variable} h-full antialiased`}
     >
+      <head>
+        {/* set the theme before first paint to avoid a flash; default dark */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html:
+              "(function(){try{var p=new URLSearchParams(location.search).get('theme');var t=p||localStorage.getItem('ross-theme');var v=t==='light'?'light':'dark';document.documentElement.setAttribute('data-theme',v);if(p)localStorage.setItem('ross-theme',v);}catch(e){document.documentElement.setAttribute('data-theme','dark');}})();",
+          }}
+        />
+      </head>
       <body className="min-h-full">{children}</body>
     </html>
   );

@@ -20,11 +20,31 @@
 
 :root { color-scheme: dark; }   /* themes native scrollbars/controls in the workspace */
 
+/* ── light theme (toggled via [data-theme="light"] on <html>) ──────────── */
+:root[data-theme="light"] {
+  color-scheme: light;
+  --bg: #f4efe6;         /* cream paper */
+  --panel: #fbf8f2;      /* near-white card */
+  --panel-2: #efe7d8;    /* inner / header strip */
+  --line: #e2dac9;
+  --line-2: #cfc4ae;
+  --ink: #1c1a16;        /* near-black */
+  --ink-dim: #5d574c;
+  --ink-faint: #8f8675;
+  --gold: #a8741f;       /* accent — deeper gold reads on cream */
+  --gold-dim: #b89a5e;
+  --ross: #2f6fb0;       /* active / links — darker blue on light */
+  --green: #2f8f5a;
+  --red: #c0392b;
+  --amber: #b07b1f;
+}
+
 html, body {
   background: var(--bg);
   color: var(--ink);
   font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
   -webkit-font-smoothing: antialiased;
+  transition: background-color 0.25s ease, color 0.25s ease;
 }
 
 .mono { font-family: "SF Mono", ui-monospace, "JetBrains Mono", Menlo, monospace; }
@@ -48,7 +68,7 @@ html, body {
   }
 }
 
-/* ── dark editorial landing (matches workspace + corpus) ─────────────── */
+/* ── editorial landing — dark by default, light via [data-theme] ──────── */
 .landing {
   color-scheme: dark;
   --paper: #100d09;
@@ -59,16 +79,36 @@ html, body {
   --ink-2: #a59c8c;
   --ink-3: #6f675a;
   --accent: #d4a24e;
+  --btn-bg: var(--accent);   /* primary CTA = gold on dark */
+  --btn-fg: #15110a;
   background:
     radial-gradient(1200px 600px at 78% -10%, #1d1710 0%, transparent 60%),
     var(--paper);
   color: var(--ink-1);
   min-height: 100vh;
+  transition: background-color 0.25s ease, color 0.25s ease;
+}
+:root[data-theme="light"] .landing {
+  color-scheme: light;
+  --paper: #ece6db;
+  --paper-2: #f4efe6;
+  --warm-line: #d9d1c2;
+  --warm-line-2: #c2b6a0;
+  --ink-1: #1c1a16;
+  --ink-2: #5d574c;
+  --ink-3: #918a7c;
+  --accent: #b07b2c;
+  --btn-bg: var(--ink-1);    /* primary CTA = near-black on light (the iconic look) */
+  --btn-fg: var(--paper-2);
+  background:
+    radial-gradient(1200px 600px at 78% -10%, #f6f1e8 0%, transparent 60%),
+    var(--paper);
 }
 .landing-card {
   background: var(--paper-2);
   border: 1px solid var(--warm-line);
   border-radius: 16px;
+  transition: background-color 0.25s ease, border-color 0.25s ease;
 }
 .pill {
   display: inline-flex;
@@ -78,13 +118,13 @@ html, body {
   border-radius: 999px;
   background: var(--paper-2);
   border: 1px solid var(--warm-line-2);
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.25);
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.12);
   font-family: var(--font-serif), Georgia, serif;
   white-space: nowrap;
 }
 .btn-dark {
-  background: var(--accent);
-  color: #15110a;
+  background: var(--btn-bg);
+  color: var(--btn-fg);
   border-radius: 12px;
   transition: transform 0.15s ease, filter 0.15s ease;
 }
@@ -96,7 +136,7 @@ html, body {
   border-radius: 12px;
   transition: border-color 0.15s ease, background 0.15s ease;
 }
-.btn-ghost:hover { border-color: var(--ink-1); background: rgba(255,255,255,0.04); }
+.btn-ghost:hover { border-color: var(--ink-1); background: color-mix(in srgb, var(--ink-1) 6%, transparent); }
 
 @keyframes float-cards {
   0%, 100% { transform: translateY(0); }
@@ -132,6 +172,7 @@ html, body {
   background: var(--panel);
   border: 1px solid var(--line);
   border-radius: 10px;
+  transition: background-color 0.25s ease, border-color 0.25s ease;
 }
 
 ::-webkit-scrollbar { width: 9px; height: 9px; }
