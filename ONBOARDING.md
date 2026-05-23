@@ -35,9 +35,8 @@ CLICKHOUSE_DATABASE=ross
 CLICKHOUSE_SECURE=true
 
 # optional
-EXA_API_KEY=        # Tier-2 web fetch for cites missing from the corpus
+NIMBLE_API_KEY=     # gov-site scraping + Tier-2 web fetch for cites missing from the corpus
 DD_API_KEY=         # Datadog tracing
-NIMBLE_API_KEY=     # anti-bot scraping for new gov sources
 ```
 
 ## Run

@@ -31,8 +31,7 @@ CH = dict(
 )
 
 COURTLISTENER_TOKEN = os.getenv("COURTLISTENER_TOKEN", "")
-NIMBLE_API_KEY = os.getenv("NIMBLE_API_KEY", "")
-EXA_API_KEY = os.getenv("EXA_API_KEY", "")  # Tier-2 web fetch (domain-restricted)
+NIMBLE_API_KEY = os.getenv("NIMBLE_API_KEY", "")  # statute scrape + Tier-2 web fetch
 DD_API_KEY = os.getenv("DD_API_KEY", "")
 DD_SITE = os.getenv("DD_SITE", "datadoghq.com")
 

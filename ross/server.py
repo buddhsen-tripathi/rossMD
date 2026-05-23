@@ -20,10 +20,10 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 
 from ross import store
-from ross.config import (CH, COURTLISTENER_TOKEN, DD_API_KEY, EXA_API_KEY,
+from ross.config import (CH, COURTLISTENER_TOKEN, DD_API_KEY,
                          NIMBLE_API_KEY, OPENROUTER_API_KEY)
 from ross.orchestrator import Orchestrator
-from ross.web import exa_fetch
+from ross.web import web_fetch
 
 app = FastAPI(title="Ross — The Pre-Lawyer")
 app.add_middleware(
@@ -58,7 +58,6 @@ def health():
         "courtlistener": bool(COURTLISTENER_TOKEN),
         "nimble": bool(NIMBLE_API_KEY),
         "datadog": bool(DD_API_KEY),
-        "exa": bool(EXA_API_KEY),
     }
 
 
@@ -303,7 +302,7 @@ def _resolve(q: str, allow_web: bool = True) -> dict:
         if hit:
             return hit
     # corpus miss → Tier 2: live fetch from authoritative domains, flagged unverified
-    web = exa_fetch(q) if allow_web else None
+    web = web_fetch(q) if allow_web else None
     if web:
         return {
             "found": True, "tier": "web", "verified": False,
