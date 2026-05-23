@@ -3,6 +3,8 @@ import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRoss, AgentState, Authority, API, RossEvent } from "@/lib/ross";
 import { CitationDrawer } from "@/components/CitationDrawer";
+import { RetrievalGraph } from "@/components/RetrievalGraph";
+import { ThemeToggle } from "@/components/ThemeToggle";
 
 const PIPELINE = [
   { key: "intake", label: "Intake", sub: "the arrangement & money flow", color: "#6d6af2" },
@@ -141,7 +143,7 @@ export default function Home() {
   const { state, run } = useRoss();
   // pre-fill the hero payer-denial scenario so the demo is one click ("Build the case")
   const [input, setInput] = useState(EXAMPLES[0].text);
-  const [tab, setTab] = useState<"activity" | "work" | "adversary" | "observability">("work");
+  const [tab, setTab] = useState<"activity" | "work" | "adversary" | "observability" | "graph">("work");
   const [ddSite, setDdSite] = useState("");
   const sawDraft = useRef(false);
   const pinnedTab = useRef(false);
@@ -231,7 +233,7 @@ export default function Home() {
   return (
     <div className="min-h-screen">
       {started && (
-        <Header tokens={state.tokens} posture={state.strategy?.posture} running={state.running} />
+        <Header tokens={state.tokens} running={state.running} />
       )}
 
       {!started ? (
@@ -250,6 +252,8 @@ export default function Home() {
             <div className="min-h-0 flex-1 overflow-y-auto">
               {tab === "activity" ? (
                 <ActivityFeed state={state} />
+              ) : tab === "graph" ? (
+                <RetrievalGraph state={state} />
               ) : tab === "observability" ? (
                 <Observability state={state} ddSite={ddSite} />
               ) : tab === "work" ? (
@@ -287,13 +291,51 @@ export default function Home() {
   );
 }
 
+// the strategist's posture is the only standing signal in the pipeline — render
+// it as an ordinal confidence meter (filled dots + plain-language label + a
+// tooltip) instead of a bare jargon word like "defensible".
+const POSTURE: Record<string, { label: string; filled: number; color: string; hint: string }> = {
+  compliant: {
+    label: "Strong", filled: 4, color: "var(--green)",
+    hint: "Strong — the arrangement is compliant on the current record.",
+  },
+  defensible: {
+    label: "Solid", filled: 3, color: "var(--gold)",
+    hint: "Solid — the position is defensible on the current record; not risk-free.",
+  },
+  "restructure-required": {
+    label: "Needs work", filled: 2, color: "var(--amber)",
+    hint: "Needs work — the arrangement should be restructured before proceeding.",
+  },
+  "high-risk": {
+    label: "Weak", filled: 1, color: "var(--red)",
+    hint: "Weak — high regulatory exposure on the current record.",
+  },
+};
+
+function PostureMeter({ posture, className = "" }: { posture: string; className?: string }) {
+  const p = POSTURE[posture];
+  if (!p) return null;
+  return (
+    <span
+      title={p.hint}
+      className={`inline-flex items-center gap-1.5 ${className}`}
+      style={{ color: p.color }}
+    >
+      <span className="uppercase tracking-wide">{p.label}</span>
+      <span aria-hidden className="tracking-tight">
+        {"●".repeat(p.filled)}
+        <span style={{ opacity: 0.3 }}>{"●".repeat(4 - p.filled)}</span>
+      </span>
+    </span>
+  );
+}
+
 function Header({
   tokens,
-  posture,
   running,
 }: {
   tokens: number;
-  posture?: string;
   running: boolean;
 }) {
   return (
@@ -312,12 +354,8 @@ function Header({
         >
           Corpus ↗
         </a>
-        {posture && (
-          <span className="rounded border border-[var(--gold-dim)] px-2 py-0.5 text-[var(--gold)]">
-            {posture}
-          </span>
-        )}
         {tokens > 0 && <span className="mono tabnum">{tokens.toLocaleString()} tok</span>}
+        <ThemeToggle />
       </div>
     </header>
   );
@@ -396,6 +434,7 @@ function Landing({
           <Link href="/corpus" className="btn-dark px-4 py-2 text-sm font-medium">
             Corpus
           </Link>
+          <ThemeToggle />
         </div>
       </nav>
 
@@ -589,6 +628,37 @@ function Theater({ state }: { state: ReturnType<typeof useRoss>["state"] }) {
                     })}
                   </div>
                 )}
+                {a.key === "researcher" && (() => {
+                  const webs = state.log.filter(
+                    (e) => e.agent === "researcher" && e.event === "web_search"
+                  );
+                  if (!webs.length) return null;
+                  const srcs = webs.flatMap((e) => e.payload.sources || []);
+                  const fetching = webs.some((e) => e.payload.status === "fetching") && !srcs.length;
+                  return (
+                    <div className="ml-[34px] mb-1 mt-1">
+                      <div className="flex items-center gap-1.5 text-[10.5px]">
+                        <span className="h-1.5 w-1.5 shrink-0 rounded-full" style={{ background: "#5fe0cf" }} />
+                        <span className="font-medium" style={{ color: "#5fe0cf" }}>
+                          Web search
+                        </span>
+                        {fetching && (
+                          <span className="blink text-[9.5px] text-[var(--ink-faint)]">live…</span>
+                        )}
+                        <span className="text-[9.5px] text-[var(--ink-faint)]">· payer policy</span>
+                      </div>
+                      {srcs.slice(0, 3).map((s: any, i: number) => (
+                        <div
+                          key={i}
+                          className="ml-3 truncate text-[9.5px] text-[var(--ink-faint)]"
+                          title={s.url}
+                        >
+                          ↳ {s.title}
+                        </div>
+                      ))}
+                    </div>
+                  );
+                })()}
               </div>
             );
           })}
@@ -638,13 +708,14 @@ function Tabs({
   ddOn,
 }: {
   tab: string;
-  setTab: (t: "activity" | "work" | "adversary" | "observability") => void;
+  setTab: (t: "activity" | "work" | "adversary" | "observability" | "graph") => void;
   nAttacks?: number;
   running: boolean;
   ddOn: boolean;
 }) {
   const tabs = [
     { k: "activity", label: "Agent Activity" },
+    { k: "graph", label: "Knowledge Graph" },
     { k: "work", label: "Work Product" },
     { k: "adversary", label: `Adversary's Best Shot${nAttacks ? ` (${nAttacks})` : ""}` },
     ...(ddOn ? [{ k: "observability", label: "Observability" }] : []),
@@ -654,7 +725,7 @@ function Tabs({
       {tabs.map((t) => (
         <button
           key={t.k}
-          onClick={() => setTab(t.k as "activity" | "work" | "adversary" | "observability")}
+          onClick={() => setTab(t.k as "activity" | "work" | "adversary" | "observability" | "graph")}
           className={`flex items-center gap-1.5 px-4 py-2.5 text-xs ${
             tab === t.k
               ? "border-b-2 border-[var(--gold)] text-[var(--ink)]"
@@ -1106,6 +1177,16 @@ function AdversaryPanel({ state }: { state: ReturnType<typeof useRoss>["state"] 
   );
 }
 
+// short, scannable label for a collapsed strategy step — leading clause,
+// capped at ~8 words, with an ellipsis when there's more behind the fold.
+function stepSummary(s: string): string {
+  const clause = s.trim().split(/[,.;:]/)[0].trim();
+  const words = clause.split(/\s+/);
+  const short = words.slice(0, 8).join(" ");
+  const truncated = words.length > 8 || clause.length < s.trim().length;
+  return truncated ? `${short}…` : short;
+}
+
 function RightRail({
   state,
   onCite,
@@ -1113,6 +1194,17 @@ function RightRail({
   state: ReturnType<typeof useRoss>["state"];
   onCite: (cite: string, a?: Authority) => void;
 }) {
+  const [playOpen, setPlayOpen] = useState(true);
+  const [citesOpen, setCitesOpen] = useState(true);
+  const [openSteps, setOpenSteps] = useState<Set<number>>(new Set());
+  const toggleStep = (i: number) =>
+    setOpenSteps((prev) => {
+      const next = new Set(prev);
+      if (next.has(i)) next.delete(i);
+      else next.add(i);
+      return next;
+    });
+
   const allAuthorities = useMemo(() => {
     const seen = new Set<string>();
     const out: Authority[] = [];
@@ -1126,54 +1218,70 @@ function RightRail({
   }, [state.research]);
 
   const strat = state.strategy;
+  // Harvey's status: "revising" only while the loop is live — once the run is
+  // done, an un-approved verdict means the revision loop finished (hit the cap),
+  // so it settles to "revised" rather than implying it's still iterating.
+  const harveyStatus = !state.harvey.verdict
+    ? null
+    : state.harvey.verdict === "approve"
+    ? { label: "approved", color: "var(--green)" }
+    : state.running
+    ? { label: "revising", color: "var(--amber)" }
+    : { label: "revised", color: "var(--ink-faint)" };
   return (
     <aside className="flex flex-col gap-4">
       {strat?.killer_move && (
         <div className="panel p-4">
           <div className="mono mb-2 flex items-center justify-between text-[11px] uppercase tracking-widest text-[var(--ink-faint)]">
-            <span>the play</span>
+            <button
+              onClick={() => setPlayOpen((o) => !o)}
+              className="flex items-center gap-1.5 hover:text-[var(--ink)]"
+            >
+              <span>{playOpen ? "▾" : "▸"}</span>
+              strategy
+            </button>
             {strat.posture && (
-              <span
-                className="rounded px-1.5 py-0.5 text-[10px]"
-                style={{
-                  color:
-                    strat.posture === "compliant"
-                      ? "var(--green)"
-                      : strat.posture === "high-risk"
-                      ? "var(--red)"
-                      : "var(--gold)",
-                  border: "1px solid currentColor",
-                }}
-              >
-                {strat.posture}
-              </span>
+              <PostureMeter
+                posture={strat.posture}
+                className="rounded border border-current px-1.5 py-0.5 text-[10px]"
+              />
             )}
           </div>
-          <div className="serif text-[10px] uppercase tracking-widest text-[var(--gold)]">killer move</div>
-          <p className="mt-1 text-[13px] leading-relaxed text-[var(--ink)]">{strat.killer_move}</p>
-          {!!strat.structure?.length && (
-            <ol className="mt-3 space-y-1.5 border-t border-[var(--line)] pt-3">
-              {strat.structure.map((s, i) => (
-                <li key={i} className="flex gap-2 text-[12px] text-[var(--ink-dim)]">
-                  <span className="text-[var(--gold-dim)]">{i + 1}.</span>
-                  <span>{s}</span>
-                </li>
-              ))}
-            </ol>
+          {playOpen && (
+            <>
+              <div className="serif text-[10px] uppercase tracking-widest text-[var(--gold)]">core argument</div>
+              <p className="mt-1 text-[13px] leading-relaxed text-[var(--ink)]">{strat.killer_move}</p>
+              {!!strat.structure?.length && (
+                <ol className="mt-3 space-y-1 border-t border-[var(--line)] pt-3">
+                  {strat.structure.map((s, i) => {
+                    const expanded = openSteps.has(i);
+                    return (
+                      <li key={i}>
+                        <button
+                          onClick={() => toggleStep(i)}
+                          aria-expanded={expanded}
+                          className="flex w-full items-start gap-1.5 text-left text-[12px] text-[var(--ink-dim)] hover:text-[var(--ink)]"
+                        >
+                          <span className="text-[var(--gold-dim)]">{expanded ? "▾" : "▸"}</span>
+                          <span className="text-[var(--gold-dim)]">{i + 1}.</span>
+                          <span className={expanded ? "leading-relaxed" : "truncate"}>
+                            {expanded ? s : stepSummary(s)}
+                          </span>
+                        </button>
+                      </li>
+                    );
+                  })}
+                </ol>
+              )}
+            </>
           )}
         </div>
       )}
       <div className="panel p-4">
         <div className="mono mb-2 flex items-center justify-between text-[11px] uppercase tracking-widest text-[var(--gold)]">
           <span>harvey</span>
-          {state.harvey.verdict && (
-            <span
-              style={{
-                color: state.harvey.verdict === "approve" ? "var(--green)" : "var(--amber)",
-              }}
-            >
-              {state.harvey.verdict === "approve" ? "approved" : "revising"}
-            </span>
+          {harveyStatus && (
+            <span style={{ color: harveyStatus.color }}>{harveyStatus.label}</span>
           )}
         </div>
         <div className="space-y-2">
@@ -1197,26 +1305,32 @@ function RightRail({
       </div>
 
       <div className="panel p-4">
-        <div className="mono mb-2 text-[11px] uppercase tracking-widest text-[var(--ink-faint)]">
-          the weapons · {allAuthorities.length}
-        </div>
-        <div className="max-h-[40vh] space-y-1.5 overflow-y-auto">
-          {allAuthorities.length === 0 && (
-            <div className="text-xs text-[var(--ink-faint)]">
-              Authorities appear as researchers pull them.
-            </div>
-          )}
-          {allAuthorities.map((a) => (
-            <button
-              key={a.doc_id}
-              onClick={() => onCite(a.citation || a.title, a)}
-              className="fade-up block w-full rounded-md border border-[var(--line)] p-2 text-left hover:border-[var(--ross)]"
-            >
-              <div className="mono text-[11px] text-[var(--ross)]">{a.citation || "—"}</div>
-              <div className="truncate text-[11px] text-[var(--ink-dim)]">{a.title}</div>
-            </button>
-          ))}
-        </div>
+        <button
+          onClick={() => setCitesOpen((o) => !o)}
+          className="mono mb-2 flex w-full items-center gap-1.5 text-[11px] uppercase tracking-widest text-[var(--ink-faint)] hover:text-[var(--ink)]"
+        >
+          <span>{citesOpen ? "▾" : "▸"}</span>
+          citations · {allAuthorities.length}
+        </button>
+        {citesOpen && (
+          <div className="max-h-[40vh] space-y-1.5 overflow-y-auto">
+            {allAuthorities.length === 0 && (
+              <div className="text-xs text-[var(--ink-faint)]">
+                Authorities appear as researchers pull them.
+              </div>
+            )}
+            {allAuthorities.map((a) => (
+              <button
+                key={a.doc_id}
+                onClick={() => onCite(a.citation || a.title, a)}
+                className="fade-up block w-full rounded-md border border-[var(--line)] p-2 text-left hover:border-[var(--ross)]"
+              >
+                <div className="mono text-[11px] text-[var(--ross)]">{a.citation || "—"}</div>
+                <div className="truncate text-[11px] text-[var(--ink-dim)]">{a.title}</div>
+              </button>
+            ))}
+          </div>
+        )}
       </div>
     </aside>
   );
