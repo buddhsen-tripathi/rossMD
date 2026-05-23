@@ -30,7 +30,7 @@ class LLM:
             headers={
                 "Authorization": f"Bearer {OPENROUTER_API_KEY}",
                 "HTTP-Referer": "https://ross.local",
-                "X-Title": "Ross - The Pre-Lawyer",
+                "X-Title": "Ross MD — Healthcare Regulatory",
             },
             timeout=httpx.Timeout(CALL_DEADLINE_S, connect=10),
         )

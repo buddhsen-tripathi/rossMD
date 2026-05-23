@@ -172,7 +172,7 @@ async def run(big: bool = False):
         f.write(json.dumps(doc) + "\n")
         f.flush()
 
-    async with httpx.AsyncClient(headers={"User-Agent": "ross-prelawyer/0.1"}) as client:
+    async with httpx.AsyncClient(headers={"User-Agent": "ross-md/0.1"}) as client:
         # 1) landmarks by citation (NY + binding federal)
         print("→ landmarks")
         for cite, tags in [(c, ["landmark"]) for c in LANDMARKS] + \

@@ -25,7 +25,7 @@ from ross.config import (CH, COURTLISTENER_TOKEN, DD_API_KEY, DD_SITE,
 from ross.orchestrator import Orchestrator
 from ross.web import web_fetch
 
-app = FastAPI(title="Ross — The Pre-Lawyer")
+app = FastAPI(title="Ross MD — Healthcare Regulatory")
 app.add_middleware(
     CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 

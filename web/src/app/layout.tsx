@@ -20,8 +20,8 @@ const fraunces = Fraunces({
 });
 
 export const metadata: Metadata = {
-  title: "Ross - The Pre-Lawyer",
-  description: "The legal associate that does the pre-work. New York law, multi-agent.",
+  title: "Ross MD — Healthcare Regulatory",
+  description: "A multi-agent healthcare regulatory legal team: Stark, AKS, FCA, HIPAA, OIG.",
 };
 
 export default function RootLayout({

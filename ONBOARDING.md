@@ -1,6 +1,6 @@
 # Ross MD — Team Onboarding
 
-The pre-lawyer for healthcare regulatory work. Drop in an arrangement, a CID, a
+A healthcare regulatory legal team. Drop in an arrangement, a CID, a
 breach, an ED transfer; a team of agents reads everything, finds every statute,
 safe harbor, and OIG opinion, and produces cited work product — structured so
 the government never asks the question.

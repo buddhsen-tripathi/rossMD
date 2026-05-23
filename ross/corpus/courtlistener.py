@@ -56,7 +56,7 @@ SLEEP_BETWEEN_PAGES = 0.3
 
 
 def headers() -> dict:
-    h = {"Accept": "application/json", "User-Agent": "ross-prelawyer/0.1"}
+    h = {"Accept": "application/json", "User-Agent": "ross-md/0.1"}
     if COURTLISTENER_TOKEN:
         h["Authorization"] = f"Token {COURTLISTENER_TOKEN}"
     return h
