@@ -13,6 +13,7 @@ import asyncio
 import json
 import re
 import uuid
+from datetime import date
 from typing import Awaitable, Callable
 
 from ross import store
@@ -196,7 +197,8 @@ class Orchestrator:
     async def draft(self, facts, theory, research, adversary, harvey_fixes=None) -> dict:
         await self._event("drafter", "start", {"revision": bool(harvey_fixes)})
         user = json.dumps({"facts": facts, "theory": theory, "research": research,
-                           "adversary": adversary, "harvey_fixes": harvey_fixes or []})
+                           "adversary": adversary, "harvey_fixes": harvey_fixes or [],
+                           "today": date.today().isoformat()})
         # markdown out (not JSON) — long documents truncate badly inside JSON strings
         raw = await self.llm.complete(
             agent="drafter", system=prompts.DRAFTER, user=user, max_tokens=12000)
