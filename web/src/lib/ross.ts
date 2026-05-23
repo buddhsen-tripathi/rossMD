@@ -8,6 +8,7 @@ export type RossEvent = {
   event: string;
   seq?: number;
   payload: Record<string, any>;
+  _ts?: number; // client receive time (ms) — for the observability console
 };
 
 export type AgentState = "idle" | "active" | "done" | "reject";
@@ -156,6 +157,7 @@ export function useRoss() {
         setState((s) => ({ ...s, running: false }));
         return;
       }
+      ev._ts = Date.now();
       setState((s) => reduce(s, ev));
     };
     es.onerror = () => {

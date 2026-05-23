@@ -127,8 +127,17 @@ function describe(ev: RossEvent): { text: string; mono?: string } | null {
 export default function Home() {
   const { state, run } = useRoss();
   const [input, setInput] = useState("");
-  const [tab, setTab] = useState<"activity" | "work" | "adversary">("work");
+  const [tab, setTab] = useState<"activity" | "work" | "adversary" | "observability">("work");
+  const [ddSite, setDdSite] = useState("");
   const sawDraft = useRef(false);
+  const pinnedTab = useRef(false);
+
+  useEffect(() => {
+    fetch(`${API}/api/health`)
+      .then((r) => r.json())
+      .then((h) => setDdSite(h.dd_site || ""))
+      .catch(() => {});
+  }, []);
   const [drawer, setDrawer] = useState<{ cite: string; docId?: string; by?: string } | null>(
     null
   );
@@ -161,7 +170,6 @@ export default function Home() {
 
   // when the draft first lands, swap from the live feed to the work product
   // (unless a ?tab= deep-link pinned the view)
-  const pinnedTab = useRef(false);
   useEffect(() => {
     if (state.draft && !sawDraft.current && !pinnedTab.current) {
       sawDraft.current = true;
@@ -176,7 +184,7 @@ export default function Home() {
 
   async function replayLast(speed?: number) {
     sawDraft.current = false;
-    setTab("activity");
+    if (!pinnedTab.current) setTab("activity");
     try {
       const r = await fetch(`${API}/api/last-run`).then((x) => x.json());
       if (r.run_id) {
@@ -193,6 +201,11 @@ export default function Home() {
   useEffect(() => {
     if (autoFired.current) return;
     const p = new URLSearchParams(window.location.search);
+    const t = p.get("tab");
+    if (t === "activity" || t === "work" || t === "adversary" || t === "observability") {
+      pinnedTab.current = true;
+      setTab(t);
+    }
     if (p.get("replay")) {
       autoFired.current = true;
       const speed = Number(p.get("speed")) || undefined;
@@ -218,10 +231,13 @@ export default function Home() {
               setTab={setTab}
               nAttacks={state.adversary?.n_attacks}
               running={state.running}
+              ddOn={!!ddSite}
             />
             <div className="min-h-0 flex-1 overflow-y-auto">
               {tab === "activity" ? (
                 <ActivityFeed state={state} />
+              ) : tab === "observability" ? (
+                <Observability state={state} ddSite={ddSite} />
               ) : tab === "work" ? (
                 <WorkProduct
                   draft={state.draft}
@@ -591,23 +607,26 @@ function Tabs({
   setTab,
   nAttacks,
   running,
+  ddOn,
 }: {
   tab: string;
-  setTab: (t: "activity" | "work" | "adversary") => void;
+  setTab: (t: "activity" | "work" | "adversary" | "observability") => void;
   nAttacks?: number;
   running: boolean;
+  ddOn: boolean;
 }) {
   const tabs = [
     { k: "activity", label: "Agent Activity" },
     { k: "work", label: "Work Product" },
     { k: "adversary", label: `Adversary's Best Shot${nAttacks ? ` (${nAttacks})` : ""}` },
+    ...(ddOn ? [{ k: "observability", label: "Observability" }] : []),
   ];
   return (
     <div className="flex border-b border-[var(--line)]">
       {tabs.map((t) => (
         <button
           key={t.k}
-          onClick={() => setTab(t.k as "activity" | "work" | "adversary")}
+          onClick={() => setTab(t.k as "activity" | "work" | "adversary" | "observability")}
           className={`flex items-center gap-1.5 px-4 py-2.5 text-xs ${
             tab === t.k
               ? "border-b-2 border-[var(--gold)] text-[var(--ink)]"
@@ -620,6 +639,88 @@ function Tabs({
           {t.label}
         </button>
       ))}
+    </div>
+  );
+}
+
+function Observability({
+  state,
+  ddSite,
+}: {
+  state: ReturnType<typeof useRoss>["state"];
+  ddSite: string;
+}) {
+  const bottomRef = useRef<HTMLDivElement>(null);
+  const t0 = state.log.find((e) => e._ts)?._ts ?? 0;
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ block: "end" });
+  }, [state.log.length]);
+
+  const ddUrl =
+    ddSite && state.runId
+      ? `https://${ddSite}/logs?query=${encodeURIComponent(`service:ross-agents run:${state.runId}`)}`
+      : ddSite
+      ? `https://${ddSite}/logs?query=service:ross-agents`
+      : "";
+
+  const sev = (ev: RossEvent): string => {
+    if (ev.event === "error") return "var(--red)";
+    if (ev.payload?.verdict === "revise" || ev.event === "harvey_reject") return "var(--amber)";
+    if (ev.event === "llm_call") return "var(--ink-faint)";
+    return AGENT_COLOR[ev.agent] ?? "var(--ink-dim)";
+  };
+  const tags = (ev: RossEvent): string => {
+    const p = ev.payload || {};
+    const bits: string[] = [];
+    if (p.model) bits.push(p.model.split("/").pop());
+    if (p.completion_tokens) bits.push(`${p.completion_tokens}tok`);
+    if (p.posture) bits.push(`posture:${p.posture}`);
+    if (p.verdict) bits.push(`verdict:${p.verdict}`);
+    if (p.n_attacks != null) bits.push(`attacks:${p.n_attacks}`);
+    if (p.n != null) bits.push(`fanout:${p.n}`);
+    if (Array.isArray(p.authorities)) bits.push(`authorities:${p.authorities.length}`);
+    if (Array.isArray(p.issues)) bits.push(`issues:${p.issues.length}`);
+    return bits.join(" ");
+  };
+
+  return (
+    <div className="flex h-full flex-col">
+      {/* datadog bar */}
+      <div className="flex items-center justify-between border-b border-[var(--line)] bg-[var(--panel-2)] px-5 py-2.5">
+        <div className="flex items-center gap-2 text-[12px]">
+          <span className="h-2 w-2 rounded-full" style={{ background: "#774aa4" }} />
+          <span className="text-[var(--ink)]">Datadog</span>
+          <span className="text-[var(--ink-faint)]">· service:ross-agents{ddSite ? ` · ${ddSite}` : ""}</span>
+          <span className="text-[var(--ink-faint)]">· {state.log.length} events · {state.tokens.toLocaleString()} tok</span>
+        </div>
+        {ddUrl && (
+          <a href={ddUrl} target="_blank" className="text-[11px] text-[var(--ross)] hover:underline">
+            Open in Datadog ↗
+          </a>
+        )}
+      </div>
+      <div className="mono min-h-0 flex-1 overflow-y-auto p-4 text-[11px] leading-relaxed">
+        {state.log.length === 0 && (
+          <div className="text-[var(--ink-faint)]">Telemetry streams here — same events shipped to Datadog.</div>
+        )}
+        {state.log.map((ev, i) => {
+          const dt = ev._ts && t0 ? ((ev._ts - t0) / 1000).toFixed(2) : "0.00";
+          const tg = tags(ev);
+          return (
+            <div key={i} className="flex gap-2 whitespace-pre-wrap">
+              <span className="shrink-0 text-[var(--ink-faint)]">{dt.padStart(6)}s</span>
+              <span className="shrink-0" style={{ color: sev(ev), width: 96 }}>
+                {(AGENT_NAME[ev.agent] ?? ev.agent).toLowerCase()}
+              </span>
+              <span className="shrink-0 text-[var(--ink-dim)]" style={{ width: 90 }}>
+                {ev.event}
+              </span>
+              {tg && <span className="text-[var(--ink-faint)]">{tg}</span>}
+            </div>
+          );
+        })}
+        <div ref={bottomRef} />
+      </div>
     </div>
   );
 }
