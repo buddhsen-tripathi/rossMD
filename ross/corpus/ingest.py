@@ -82,27 +82,46 @@ def _parse_date(s):
     return d if 1900 <= d.year <= 2299 else None
 
 
-def run():
+DOC_COLS = ["doc_id", "source", "doc_type", "jurisdiction", "title",
+            "citation", "court", "date_filed", "url", "text",
+            "cites", "practice_area"]
+CHUNK_COLS = ["chunk_id", "doc_id", "seq", "doc_type", "title",
+              "citation", "url", "text", "embedding"]
+_VEC_SETTING = {"allow_experimental_vector_similarity_index": 1}
+
+
+def run(rebuild: bool = False):
+    """Ingest data/raw/*.jsonl into ClickHouse.
+
+    Default = INCREMENTAL: only NEW doc_ids are embedded + appended; the live
+    corpus is never truncated, so it stays queryable the whole time (safe to run
+    while the app is serving / demoing). Adding a new source only embeds its docs.
+
+    --rebuild = atomic full re-embed: load into staging tables, then EXCHANGE
+    TABLES (the live corpus never drops to zero during the swap)."""
     init_db()
     files = sorted(DATA_RAW.glob("*.jsonl"))
     if not files:
         print("no raw JSONL in data/raw/ — run a scraper first", file=sys.stderr)
         return
-
     c = client()
-    # idempotent: re-running ingest replaces the corpus rather than duplicating
-    c.command("TRUNCATE TABLE IF EXISTS documents")
-    c.command("TRUNCATE TABLE IF EXISTS chunks")
 
-    DOC_COLS = ["doc_id", "source", "doc_type", "jurisdiction", "title",
-                "citation", "court", "date_filed", "url", "text",
-                "cites", "practice_area"]
-    CHUNK_COLS = ["chunk_id", "doc_id", "seq", "doc_type", "title",
-                  "citation", "url", "text", "embedding"]
+    if rebuild:
+        doc_tbl, chunk_tbl = "documents_rebuild", "chunks_rebuild"
+        for t in (doc_tbl, chunk_tbl):
+            c.command(f"DROP TABLE IF EXISTS {t}")
+        c.command(f"CREATE TABLE {doc_tbl} AS documents", settings=_VEC_SETTING)
+        c.command(f"CREATE TABLE {chunk_tbl} AS chunks", settings=_VEC_SETTING)
+        existing: set[str] = set()
+        print("→ rebuild: loading into staging tables (live corpus stays up)")
+    else:
+        doc_tbl, chunk_tbl = "documents", "chunks"
+        existing = {r[0] for r in c.query("SELECT doc_id FROM documents").result_rows}
+        print(f"→ incremental: {len(existing)} docs already in corpus — adding only new ones")
 
     seen_docs = set()
     pending_text, pending_meta = [], []
-    n_docs = n_chunks = 0
+    n_docs = n_chunks = skipped = 0
 
     def flush_embeddings():
         nonlocal n_chunks
@@ -110,11 +129,11 @@ def run():
             return
         vecs = embed(pending_text)
         rows = [[*meta, vec] for meta, vec in zip(pending_meta, vecs)]
-        c.insert("chunks", rows, column_names=CHUNK_COLS)   # stream insert
+        c.insert(chunk_tbl, rows, column_names=CHUNK_COLS)
         n_chunks += len(rows)
         pending_text.clear()
         pending_meta.clear()
-        print(f"  … {n_docs} docs, {n_chunks} chunks", flush=True)
+        print(f"  … {n_docs} new docs, {n_chunks} chunks", flush=True)
 
     doc_batch = []
     for fp in files:
@@ -123,9 +142,12 @@ def run():
             if not line:
                 continue
             d = normalize(json.loads(line))
-            if d["doc_id"] in seen_docs or not d["text"]:
+            if not d["text"] or d["doc_id"] in seen_docs:
                 continue
             seen_docs.add(d["doc_id"])
+            if d["doc_id"] in existing:   # already in the live corpus — skip (no re-embed)
+                skipped += 1
+                continue
             doc_batch.append([
                 d["doc_id"], d["source"], d["doc_type"], d["jurisdiction"],
                 d["title"], d["citation"], d["court"], _parse_date(d["date_filed"]),
@@ -133,7 +155,7 @@ def run():
             ])
             n_docs += 1
             if len(doc_batch) >= 500:
-                c.insert("documents", doc_batch, column_names=DOC_COLS)
+                c.insert(doc_tbl, doc_batch, column_names=DOC_COLS)
                 doc_batch = []
             for seq, passage in enumerate(split(d["text"])):
                 pending_text.append(f"{d['title']} {d['citation']}\n{passage}")
@@ -144,10 +166,19 @@ def run():
                 if len(pending_text) >= EMBED_BATCH:
                     flush_embeddings()
     if doc_batch:
-        c.insert("documents", doc_batch, column_names=DOC_COLS)
+        c.insert(doc_tbl, doc_batch, column_names=DOC_COLS)
     flush_embeddings()
-    print(f"✓ ingested {n_docs} docs, {n_chunks} chunks")
+
+    if rebuild:
+        # atomic swap — live tables never empty
+        c.command(f"EXCHANGE TABLES documents AND {doc_tbl}")
+        c.command(f"EXCHANGE TABLES chunks AND {chunk_tbl}")
+        c.command(f"DROP TABLE {doc_tbl}")
+        c.command(f"DROP TABLE {chunk_tbl}")
+        print(f"✓ rebuilt + swapped in {n_docs} docs, {n_chunks} chunks (zero downtime)")
+    else:
+        print(f"✓ added {n_docs} new docs, {n_chunks} chunks (skipped {skipped} already present)")
 
 
 if __name__ == "__main__":
-    run()
+    run(rebuild="--rebuild" in sys.argv)

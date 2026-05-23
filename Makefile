@@ -1,4 +1,4 @@
-.PHONY: ch-up ch-down db scrape-healthcare scrape-oig scrape-oig-guidance scrape-all ingest api web bringup
+.PHONY: ch-up ch-down db scrape-healthcare scrape-oig scrape-oig-guidance scrape-all ingest rebuild api web bringup
 
 # 0. local ClickHouse (no creds, no signup) — or point .env at ClickHouse Cloud
 ch-up:
@@ -21,9 +21,14 @@ scrape-oig-guidance:      # Special Fraud Alerts, Advisory Bulletins, Compliance
 	uv run python -m ross.corpus.oig_guidance
 scrape-all: scrape-healthcare scrape-oig scrape-oig-guidance
 
-# 3. embed everything in data/raw/*.jsonl into ClickHouse (truncates + reloads)
+# 3. embed into ClickHouse. Default = INCREMENTAL: only new docs are embedded +
+# appended; the live corpus is never truncated (safe to run mid-demo).
 ingest:
 	uv run python -m ross.corpus.ingest
+
+# atomic full re-embed: load to staging, then EXCHANGE TABLES (zero downtime)
+rebuild:
+	uv run python -m ross.corpus.ingest --rebuild
 
 # 4. backend API (SSE agent theater) / frontend
 api:
