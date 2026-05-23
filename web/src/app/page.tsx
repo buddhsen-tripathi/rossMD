@@ -1,7 +1,7 @@
 "use client";
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useRoss, AgentState, Authority, API } from "@/lib/ross";
+import { useRoss, AgentState, Authority, API, RossEvent } from "@/lib/ross";
 import { CitationDrawer } from "@/components/CitationDrawer";
 
 const PIPELINE = [
@@ -44,10 +44,91 @@ const COLOR: Record<AgentState, string> = {
   reject: "var(--red)",
 };
 
+const AGENT_COLOR: Record<string, string> = {
+  intake: "#6d6af2",
+  issue_spotter: "#4f86e8",
+  researcher: "#2bb6bf",
+  strategist: "#3fb878",
+  adversary: "#e0894f",
+  drafter: "#d98a4a",
+  harvey: "#c98a2b",
+  orchestrator: "#8892a6",
+};
+const AGENT_NAME: Record<string, string> = {
+  intake: "Intake",
+  issue_spotter: "Issue Spotter",
+  researcher: "Researcher",
+  strategist: "Strategist",
+  adversary: "Adversary",
+  drafter: "Drafter",
+  harvey: "Harvey",
+  orchestrator: "Ross",
+};
+
+// turn a raw event into a human line for the live feed (or null to skip)
+function describe(ev: RossEvent): { text: string; mono?: string } | null {
+  const p = ev.payload || {};
+  switch (`${ev.agent}/${ev.event}`) {
+    case "intake/start":
+      return { text: "Reading the file — parties, money flow, referrals" };
+    case "intake/done":
+      return {
+        text: `Extracted the facts${p.missing?.length ? ` · flagged ${p.missing.length} open questions` : ""}`,
+      };
+    case "issue_spotter/start":
+      return { text: "Spotting every angle of regulatory exposure…" };
+    case "issue_spotter/done":
+      return {
+        text: `Spotted ${p.issues?.length ?? 0} issues: ${(p.issues ?? [])
+          .map((i: any) => i.label)
+          .slice(0, 6)
+          .join(" · ")}`,
+      };
+    case "orchestrator/fan_out":
+      return { text: `Fanning out ${p.n} researchers — in parallel` };
+    case "researcher/retrieved":
+      return { text: `Pulled ${p.authorities?.length ?? 0} authorities for “${p.label ?? p.issue_id}”` };
+    case "researcher/done":
+      return p.bottom_line ? { text: `Research: ${p.bottom_line}` } : null;
+    case "strategist/start":
+      return { text: "Building the theory of the case…" };
+    case "strategist/done":
+      return { text: `Theory set — posture: ${p.posture ?? "—"}` };
+    case "adversary/start":
+      return { text: "Opposing counsel attacking the position…" };
+    case "adversary/done":
+      return { text: `${p.n_attacks ?? 0} government attacks anticipated and pre-empted` };
+    case "drafter/start":
+      return { text: p.revision ? "Revising the work product on Harvey's notes…" : "Drafting the work product…" };
+    case "drafter/done":
+      return { text: "Draft ready" };
+    case "harvey/start":
+      return { text: `Reviewing the draft (round ${p.round ?? 1})…` };
+    case "harvey/verdict":
+      return {
+        text: `${p.verdict === "approve" ? "APPROVED" : "REVISE"} — “${p.one_liner ?? ""}”`,
+      };
+    case "orchestrator/run_done":
+      return { text: "Work product complete" };
+    case "intake/llm_call":
+    case "issue_spotter/llm_call":
+    case "strategist/llm_call":
+    case "adversary/llm_call":
+    case "drafter/llm_call":
+    case "harvey/llm_call":
+      return p.completion_tokens
+        ? { text: "", mono: `${(p.model || "").split("/").pop()} · ${p.completion_tokens} tok` }
+        : null;
+    default:
+      return null;
+  }
+}
+
 export default function Home() {
   const { state, run } = useRoss();
   const [input, setInput] = useState("");
-  const [tab, setTab] = useState<"work" | "adversary">("work");
+  const [tab, setTab] = useState<"activity" | "work" | "adversary">("work");
+  const sawDraft = useRef(false);
   const [drawer, setDrawer] = useState<{ cite: string; docId?: string; by?: string } | null>(
     null
   );
@@ -73,9 +154,20 @@ export default function Home() {
     const s = text.trim();
     if (!s) return;
     setInput(s);
-    setTab("work");
+    sawDraft.current = false;
+    setTab("activity"); // watch the agents work while the draft builds
     run(s);
   }
+
+  // when the draft first lands, swap from the live feed to the work product
+  // (unless a ?tab= deep-link pinned the view)
+  const pinnedTab = useRef(false);
+  useEffect(() => {
+    if (state.draft && !sawDraft.current && !pinnedTab.current) {
+      sawDraft.current = true;
+      setTab("work");
+    }
+  }, [state.draft]);
 
   // post-workflow follow-up: re-analyze with the original scenario + new context
   function askFollowUp(q: string) {
@@ -83,7 +175,8 @@ export default function Home() {
   }
 
   async function replayLast(speed?: number) {
-    setTab("work");
+    sawDraft.current = false;
+    setTab("activity");
     try {
       const r = await fetch(`${API}/api/last-run`).then((x) => x.json());
       if (r.run_id) {
@@ -120,9 +213,16 @@ export default function Home() {
         <div className="mx-auto grid max-w-[1500px] grid-cols-[330px_1fr_380px] gap-4 px-4 pb-10">
           <Theater state={state} />
           <main className="panel flex h-[84vh] flex-col overflow-hidden">
-            <Tabs tab={tab} setTab={setTab} nAttacks={state.adversary?.n_attacks} />
+            <Tabs
+              tab={tab}
+              setTab={setTab}
+              nAttacks={state.adversary?.n_attacks}
+              running={state.running}
+            />
             <div className="min-h-0 flex-1 overflow-y-auto">
-              {tab === "work" ? (
+              {tab === "activity" ? (
+                <ActivityFeed state={state} />
+              ) : tab === "work" ? (
                 <WorkProduct
                   draft={state.draft}
                   running={state.running}
@@ -490,29 +590,101 @@ function Tabs({
   tab,
   setTab,
   nAttacks,
+  running,
 }: {
   tab: string;
-  setTab: (t: "work" | "adversary") => void;
+  setTab: (t: "activity" | "work" | "adversary") => void;
   nAttacks?: number;
+  running: boolean;
 }) {
+  const tabs = [
+    { k: "activity", label: "Agent Activity" },
+    { k: "work", label: "Work Product" },
+    { k: "adversary", label: `Adversary's Best Shot${nAttacks ? ` (${nAttacks})` : ""}` },
+  ];
   return (
     <div className="flex border-b border-[var(--line)]">
-      {[
-        { k: "work", label: "Work Product" },
-        { k: "adversary", label: `Adversary's Best Shot${nAttacks ? ` (${nAttacks})` : ""}` },
-      ].map((t) => (
+      {tabs.map((t) => (
         <button
           key={t.k}
-          onClick={() => setTab(t.k as "work" | "adversary")}
-          className={`px-4 py-2.5 text-xs ${
+          onClick={() => setTab(t.k as "activity" | "work" | "adversary")}
+          className={`flex items-center gap-1.5 px-4 py-2.5 text-xs ${
             tab === t.k
               ? "border-b-2 border-[var(--gold)] text-[var(--ink)]"
               : "text-[var(--ink-faint)] hover:text-[var(--ink-dim)]"
           }`}
         >
+          {t.k === "activity" && running && (
+            <span className="blink h-1.5 w-1.5 rounded-full bg-[var(--ross)]" />
+          )}
           {t.label}
         </button>
       ))}
+    </div>
+  );
+}
+
+function ActivityFeed({
+  state,
+}: {
+  state: ReturnType<typeof useRoss>["state"];
+}) {
+  const bottomRef = useRef<HTMLDivElement>(null);
+  const items = useMemo(
+    () => state.log.map((ev) => ({ ev, d: describe(ev) })).filter((x) => x.d),
+    [state.log]
+  );
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
+  }, [items.length]);
+
+  const nAuth = useMemo(
+    () => new Set(Object.values(state.research).flatMap((r) => r.authorities.map((a) => a.doc_id))).size,
+    [state.research]
+  );
+
+  return (
+    <div className="p-6">
+      <div className="mb-4 flex items-center justify-between">
+        <div>
+          <div className="serif text-lg text-[var(--ink)]">Ross is working the file</div>
+          <div className="text-[12px] text-[var(--ink-dim)]">
+            Seven specialized agents · {state.issues.length || "…"} issues · {nAuth} authorities pulled ·{" "}
+            {state.tokens.toLocaleString()} tokens reasoned
+          </div>
+        </div>
+        {state.running && <span className="blink text-[11px] text-[var(--ross)]">● live</span>}
+      </div>
+
+      <div className="relative pl-4">
+        <div className="absolute bottom-2 left-[5px] top-2 w-px bg-[var(--line)]" />
+        <div className="space-y-2.5">
+          {items.map(({ ev, d }, i) => {
+            const color = AGENT_COLOR[ev.agent] ?? "var(--ink-faint)";
+            if (d!.text === "" && d!.mono)
+              return (
+                <div key={i} className="fade-up flex items-center gap-2 pl-3 text-[10.5px] text-[var(--ink-faint)]">
+                  <span className="mono">{d!.mono}</span>
+                </div>
+              );
+            return (
+              <div key={i} className="fade-up relative flex gap-3">
+                <span
+                  className="absolute left-[-13px] top-[5px] h-2 w-2 rounded-full"
+                  style={{ background: color, boxShadow: `0 0 6px ${color}` }}
+                />
+                <div className="min-w-0">
+                  <span className="text-[11px] font-semibold" style={{ color }}>
+                    {AGENT_NAME[ev.agent] ?? ev.agent}
+                  </span>
+                  <span className="ml-2 text-[12.5px] text-[var(--ink-dim)]">{d!.text}</span>
+                </div>
+              </div>
+            );
+          })}
+          <div ref={bottomRef} />
+        </div>
+      </div>
     </div>
   );
 }
