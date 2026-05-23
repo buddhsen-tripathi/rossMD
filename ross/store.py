@@ -56,7 +56,10 @@ SCHEMA = [
         url        String,
         text       String,
         embedding  Array(Float32),
-        CONSTRAINT emb_dim CHECK length(embedding) = {EMBED_DIM}
+        CONSTRAINT emb_dim CHECK length(embedding) = {EMBED_DIM},
+        -- HNSW approximate-nearest-neighbour index over the embeddings, so
+        -- semantic search scales as the corpus grows (vs. a full scan).
+        INDEX emb_idx embedding TYPE vector_similarity('hnsw', 'cosineDistance', {EMBED_DIM}) GRANULARITY 8
     ) ENGINE = MergeTree()
     ORDER BY (doc_id, seq)
     """,
@@ -94,7 +97,7 @@ def init_db():
     c.command(f"CREATE DATABASE IF NOT EXISTS {CH['database']}")
     cc = client()
     for ddl in SCHEMA:
-        cc.command(ddl)
+        cc.command(ddl, settings={"allow_experimental_vector_similarity_index": 1})
     print("✓ schema ready:", ", ".join(["documents", "chunks", "runs", "traces"]))
 
 
@@ -129,7 +132,8 @@ def vector_search(query_embedding: list[float], k: int = 8,
             ORDER BY dist ASC
             LIMIT {k}
         """
-    res = client().query(sql)
+    # enable the HNSW vector index for the ORDER BY cosineDistance … LIMIT path
+    res = client().query(sql, settings={"allow_experimental_vector_similarity_index": 1})
     cols = res.column_names
     return [dict(zip(cols, row)) for row in res.result_rows]
 
