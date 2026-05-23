@@ -211,24 +211,27 @@ def last_run():
 
 def _doc_row(row: dict) -> dict:
     row["found"] = True
-    row["tier"] = "corpus"        # Tier 1 — verified primary-source text we hold
-    row["verified"] = True
-    row["source_url"] = source_url(row.get("doc_type", ""), row.get("citation", ""),
-                                   row.get("url", ""))
+    # cached live-web sources stay Tier-2/unverified even though they live in the
+    # documents table — a payer policy never masquerades as primary authority.
+    is_web = row.get("source") == "web"
+    row["tier"] = "web" if is_web else "corpus"
+    row["verified"] = not is_web
+    row["source_url"] = (row.get("url") or "") if is_web else source_url(
+        row.get("doc_type", ""), row.get("citation", ""), row.get("url", ""))
     return row
 
 
 @app.get("/api/doc/{doc_id}")
 def get_doc(doc_id: str):
     res = store.client().query(
-        "SELECT doc_id, doc_type, title, citation, court, url, text "
+        "SELECT doc_id, doc_type, title, citation, court, url, text, source "
         "FROM documents WHERE doc_id = %(d)s LIMIT 1", parameters={"d": doc_id})
     if not res.result_rows:
         return {"found": False, "doc_id": doc_id}
     return _doc_row(dict(zip(res.column_names, res.result_rows[0])))
 
 
-_SELECT = ("SELECT doc_id, doc_type, title, citation, court, url, text, "
+_SELECT = ("SELECT doc_id, doc_type, title, citation, court, url, text, source, "
            "lower(replaceRegexpAll(citation,'[^0-9a-zA-Z]','')) AS k FROM documents")
 
 

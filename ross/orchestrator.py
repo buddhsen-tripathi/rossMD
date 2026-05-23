@@ -10,6 +10,7 @@ The whole blackboard is persisted to `runs` at the end.
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import json
 import re
 import uuid
@@ -18,9 +19,11 @@ from typing import Awaitable, Callable
 
 from ross import store
 from ross.agents import prompts
-from ross.embed import embed_one
+from ross.corpus.ingest import CHUNK_COLS, DOC_COLS, split
+from ross.embed import embed, embed_one
 from ross.llm import LLM
 from ross.trace import emit_dd, flush_dd
+from ross.web import web_fetch
 
 Emit = Callable[[dict], Awaitable[None]]
 HARVEY_MAX_ROUNDS = 2
@@ -114,14 +117,61 @@ class Orchestrator:
         return out[:RESEARCH_K]
 
     @staticmethod
-    def _fmt_authorities(chunks: list[dict]) -> str:
-        if not chunks:
-            return "(no authorities retrieved — corpus thin on this issue)"
+    def _fmt_authorities(chunks: list[dict], web: list[dict] | None = None) -> str:
         out = []
         for c in chunks:
-            out.append(f"[doc_id={c['doc_id']}] {c['title']} — {c['citation']}\n"
+            out.append(f"[CORPUS doc_id={c['doc_id']}] {c['title']} — {c['citation']}\n"
                        f"  {c['text'][:900]}")
+        for w in (web or []):
+            out.append(f"[LIVE WEB — UNVERIFIED doc_id={w['doc_id']}] {w['title']} — {w['url']}\n"
+                       f"  {(w.get('text') or '')[:900]}")
+        if not out:
+            return "(no authorities retrieved — corpus thin on this issue)"
         return "\n\n".join(out)
+
+    # ── web-search autonomy ───────────────────────────────────────────
+    async def route(self, issue: dict, corpus_hits: list[dict]) -> dict:
+        """Decide where this issue's authority lives: clickhouse | web | both |
+        human_needed — and why. A first-class agent decision, not a fallback."""
+        preview = "; ".join(f"{c['title']} ({c['citation']})" for c in corpus_hits[:6]) \
+            or "(corpus returned nothing for this issue)"
+        user = json.dumps({
+            "issue": {k: issue.get(k) for k in ("label", "area", "theory", "authorities_to_find")},
+            "corpus_preview": preview})
+        dec = await self.llm.complete_json(
+            agent="researcher", system=prompts.RETRIEVAL_ROUTER, user=user, max_tokens=800)
+        if dec.get("decision") not in ("clickhouse", "web", "both", "human_needed"):
+            dec["decision"] = "clickhouse"
+        return dec
+
+    def _cache_web_source(self, src: dict, area: str) -> dict:
+        """Persist a fetched web source into ClickHouse (documents + embedded
+        chunks) so it enters the SAME retrieval / citation / graph / replay path
+        as the corpus. Tagged source='web' so it stays Tier-2/unverified."""
+        url = src.get("url", "")
+        doc_id = "web-" + hashlib.sha1(url.encode()).hexdigest()[:16]
+        title = src.get("title") or url
+        kind = src.get("kind", "payer_policy")
+        text = src.get("text", "")
+        try:
+            c = store.client()
+            if not c.query("SELECT 1 FROM documents WHERE doc_id=%(d)s LIMIT 1",
+                           parameters={"d": doc_id}).result_rows:
+                c.insert("documents",
+                         [[doc_id, "web", kind, "", title, title, "", None, url, text, [],
+                           [area] if area else []]],
+                         column_names=DOC_COLS)
+                passages = split(text)[:12]
+                if passages:
+                    vecs = embed([f"{title}\n{p}" for p in passages])
+                    rows = [[f"{doc_id}-{i}", doc_id, i, kind, title, title, url, p, v]
+                            for i, (p, v) in enumerate(zip(passages, vecs))]
+                    c.insert("chunks", rows, column_names=CHUNK_COLS,
+                             settings={"allow_experimental_vector_similarity_index": 1})
+        except Exception:
+            pass  # caching is best-effort; the source still feeds this run
+        return {"doc_id": doc_id, "title": title, "citation": title,
+                "url": url, "kind": kind, "text": text}
 
     # ── agents ────────────────────────────────────────────────────────
     async def intake(self, scenario: str) -> dict:
@@ -147,20 +197,49 @@ class Orchestrator:
         return issues
 
     async def research_one(self, issue: dict) -> dict:
-        await self._event("researcher", "start", {"issue_id": issue["id"], "label": issue["label"]})
+        iid = issue["id"]
+        await self._event("researcher", "start", {"issue_id": iid, "label": issue["label"]})
         chunks = self.retrieve(issue)
+
+        # decide where this issue's authority lives (first-class, not a fallback)
+        route = await self.route(issue, chunks)
+        decision, reason = route["decision"], route.get("reason", "")
+        await self._event("researcher", "route",
+                          {"issue_id": iid, "decision": decision, "reason": reason,
+                           "queries": route.get("web_queries", [])})
+
+        # live web retrieval BEFORE drafting, when the agent asked for it
+        web_auths: list[dict] = []
+        if decision in ("web", "both"):
+            for q in (route.get("web_queries") or [])[:2]:
+                src = await asyncio.to_thread(web_fetch, q)   # off the event loop (render can be slow)
+                if src:
+                    web_auths.append(await asyncio.to_thread(
+                        self._cache_web_source, src, issue.get("area", "")))
+            await self._event("researcher", "web_search",
+                              {"issue_id": iid, "n": len(web_auths),
+                               "queries": route.get("web_queries", []),
+                               "sources": [{"title": w["title"], "url": w["url"], "kind": w["kind"]}
+                                           for w in web_auths]})
+        elif decision == "human_needed":
+            await self._event("researcher", "human_needed", {"issue_id": iid, "reason": reason})
+
+        # corpus + web fold into ONE authority list (same provenance path)
+        authorities = [{"doc_id": c["doc_id"], "title": c["title"], "citation": c["citation"],
+                        "url": c["url"], "kind": "corpus"} for c in chunks] + \
+                      [{"doc_id": w["doc_id"], "title": w["title"], "citation": w["citation"],
+                        "url": w["url"], "kind": w["kind"]} for w in web_auths]
         await self._event("researcher", "retrieved",
-                          {"issue_id": issue["id"],
-                           "authorities": [{"doc_id": c["doc_id"], "title": c["title"],
-                                            "citation": c["citation"], "url": c["url"]}
-                                           for c in chunks]})
+                          {"issue_id": iid, "authorities": authorities})
+
         user = (f"ISSUE:\n{json.dumps(issue)}\n\n"
-                f"RETRIEVED NY AUTHORITIES:\n{self._fmt_authorities(chunks)}")
+                f"RETRIEVED AUTHORITIES (corpus + live web):\n"
+                f"{self._fmt_authorities(chunks, web_auths)}")
         note = await self.llm.complete_json(
             agent="researcher", system=prompts.RESEARCHER, user=user, max_tokens=5000)
-        note["issue_id"] = issue["id"]
+        note["issue_id"] = iid
         await self._event("researcher", "done",
-                          {"issue_id": issue["id"], "bottom_line": note.get("bottom_line", "")})
+                          {"issue_id": iid, "bottom_line": note.get("bottom_line", "")})
         return note
 
     async def research_all(self, issues: list[dict]) -> list[dict]:

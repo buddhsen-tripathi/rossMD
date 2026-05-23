@@ -1,11 +1,12 @@
 import asyncio, time, json
 from ross.orchestrator import Orchestrator
 
-SCENARIO = ("A 400-bed hospital wants to pay a 6-physician cardiology group a fixed annual fee to "
-            "serve as medical directors of its new cardiac cath lab. The cardiologists refer Medicare "
-            "and Medicaid patients to the hospital for cardiac procedures. The proposed compensation is "
-            "above the local median for medical-director services and isn't tied to an hourly log. How "
-            "do we structure this to comply with Stark and the Anti-Kickback Statute?")
+SCENARIO = ("UnitedHealthcare denied our client hospital's claim for a 4-day inpatient cardiac "
+            "admission as 'not medically necessary,' downgrading it to observation and citing MCG "
+            "care guidelines. The patient presented with chest pain, elevated troponins, and a "
+            "positive stress test, and was admitted by the attending cardiologist. The plan is an "
+            "ERISA self-funded plan; we are at the internal appeal stage with the deadline in 12 "
+            "days. Build the appeal to overturn the denial.")
 
 t0 = time.time()
 async def emit(ev):

@@ -16,24 +16,24 @@ const PIPELINE = [
 
 const EXAMPLES = [
   {
+    chip: "🩺 UnitedHealthcare — inpatient denied 'not medically necessary'",
+    text: "UnitedHealthcare denied our client hospital's claim for a 4-day inpatient cardiac admission as 'not medically necessary,' downgrading it to observation and citing MCG care guidelines. The patient had chest pain, elevated troponins, and a positive stress test. The plan is ERISA self-funded; we're at internal appeal with the deadline in 12 days. Build the appeal to overturn the denial.",
+  },
+  {
+    chip: "🧬 Aetna — therapy denied 'experimental / investigational'",
+    text: "Aetna denied prior authorization for proton beam therapy for our client's pediatric CNS tumor patient as 'experimental and investigational,' citing its clinical policy bulletin. Build the appeal packet to overturn the denial and preserve external-review rights.",
+  },
+  {
+    chip: "💳 ERISA emergency out-of-network denial",
+    text: "An ERISA self-funded plan denied our client hospital's $180,000 claim for emergency out-of-network care as 'not medically necessary.' Internal appeals are exhausted. What's our move under ERISA, the No Surprises Act, and the plan's claims-procedure obligations?",
+  },
+  {
     chip: "🏥 Stark / Anti-Kickback arrangement",
     text: "A hospital wants to pay a 6-physician cardiology group a fixed annual fee to serve as medical directors of its new cath lab. The cardiologists refer Medicare and Medicaid patients to the hospital for cardiac procedures. Proposed pay is above the local median for the role. How do we structure this to comply with Stark and the Anti-Kickback Statute?",
   },
   {
     chip: "⚖ Qui tam / DOJ investigation",
     text: "A former billing manager filed a qui tam alleging our client, a physician group, billed Medicare for services referred under a kickback arrangement with an outside lab. DOJ just issued a Civil Investigative Demand. Build our defense.",
-  },
-  {
-    chip: "🔒 HIPAA breach",
-    text: "A hospital employee emailed a spreadsheet with 1,200 patients' PHI to a personal account before resigning. OCR hasn't contacted us yet. What are our breach-notification obligations and our exposure?",
-  },
-  {
-    chip: "🚑 EMTALA transfer",
-    text: "A patient in active labor was transferred from our client's ED to another hospital 40 minutes away without being stabilized; the baby was delivered en route. CMS sent a notice of potential EMTALA violation. What's our exposure and defense?",
-  },
-  {
-    chip: "💳 ERISA / payer denial",
-    text: "An ERISA self-funded plan denied our client hospital's $180,000 claim for emergency out-of-network care as 'not medically necessary.' Internal appeals are exhausted. What's our move under ERISA, the No Surprises Act, and the plan's claims-procedure obligations?",
   },
 ];
 
@@ -65,6 +65,19 @@ const AGENT_NAME: Record<string, string> = {
   orchestrator: "Ross",
 };
 
+// ── ONE vibrant gradient spectrum (Nimu-style), shared by every page ──
+// each base color → a richer linear gradient for nodes/cards/pills.
+const GRAD: Record<string, string> = {
+  "#6d6af2": "linear-gradient(145deg,#8b7cf6,#6d6af2)",
+  "#4f86e8": "linear-gradient(145deg,#5fa0f2,#4f86e8)",
+  "#2bb6bf": "linear-gradient(145deg,#34cfd4,#2bb6bf)",
+  "#3fb878": "linear-gradient(145deg,#52cf8c,#3fb878)",
+  "#e0894f": "linear-gradient(145deg,#f0a55f,#e0894f)",
+  "#d98a4a": "linear-gradient(145deg,#ecb95a,#d98a4a)",
+  "#c98a2b": "linear-gradient(145deg,#e8b23e,#c98a2b)",
+};
+const grad = (c: string) => GRAD[c] ?? c;
+
 // turn a raw event into a human line for the live feed (or null to skip)
 function describe(ev: RossEvent): { text: string; mono?: string } | null {
   const p = ev.payload || {};
@@ -86,6 +99,18 @@ function describe(ev: RossEvent): { text: string; mono?: string } | null {
       };
     case "orchestrator/fan_out":
       return { text: `Fanning out ${p.n} researchers — in parallel` };
+    case "researcher/route":
+      if (p.decision === "human_needed") return { text: `Needs the client: ${p.reason}` };
+      if (p.decision === "clickhouse") return null; // corpus-only — no need to narrate
+      return { text: `Going to the web — ${p.reason}` };
+    case "researcher/web_search":
+      return {
+        text: `Live web search — ${p.n} source${p.n === 1 ? "" : "s"}${
+          p.sources?.length ? `: ${p.sources.map((s: any) => s.title).slice(0, 2).join(" · ")}` : ""
+        }`,
+      };
+    case "researcher/human_needed":
+      return { text: `Flagged for counsel — ${p.reason}` };
     case "researcher/retrieved":
       return { text: `Pulled ${p.authorities?.length ?? 0} authorities for “${p.label ?? p.issue_id}”` };
     case "researcher/done":
@@ -126,7 +151,8 @@ function describe(ev: RossEvent): { text: string; mono?: string } | null {
 
 export default function Home() {
   const { state, run } = useRoss();
-  const [input, setInput] = useState("");
+  // pre-fill the hero payer-denial scenario so the demo is one click ("Build the case")
+  const [input, setInput] = useState(EXAMPLES[0].text);
   const [tab, setTab] = useState<"activity" | "work" | "adversary" | "observability">("work");
   const [ddSite, setDdSite] = useState("");
   const sawDraft = useRef(false);
@@ -295,16 +321,16 @@ function Header({
             {posture}
           </span>
         )}
-        {tokens > 0 && <span className="mono">{tokens.toLocaleString()} tok</span>}
+        {tokens > 0 && <span className="mono tabnum">{tokens.toLocaleString()} tok</span>}
       </div>
     </header>
   );
 }
 
 const HERO_PILLS = [
-  { label: "Stark & AKS", glyph: "§", color: "#b07b2c" },
-  { label: "Safe harbors", glyph: "◆", color: "#5a7d9a" },
-  { label: "OIG opinions", glyph: "✦", color: "#7a8b5a" },
+  { label: "Payer denials", glyph: "⊘", color: "#d98a4a" },
+  { label: "Appeal rights", glyph: "◆", color: "#4f86e8" },
+  { label: "Medical necessity", glyph: "✦", color: "#3fb878" },
 ];
 
 // The 5 process steps — same motif as the workspace agent theater.
@@ -330,7 +356,7 @@ function PipelinePreview() {
           >
             <span
               className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-[11px] font-semibold text-white"
-              style={{ background: p.color, boxShadow: `0 0 0 4px ${p.color}22` }}
+              style={{ background: grad(p.color), boxShadow: `0 0 0 4px ${p.color}22` }}
             >
               {i + 1}
             </span>
@@ -383,12 +409,15 @@ function Landing({
       {/* hero */}
       <div className="mx-auto grid max-w-[1180px] grid-cols-1 items-center gap-10 px-6 pt-10 lg:grid-cols-[1.05fr_0.95fr]">
         <div>
-          <h1 className="serif text-[clamp(2.6rem,5vw,4.4rem)] font-light leading-[1.02] tracking-[-0.02em] text-[var(--ink-1)]">
-            Read the file.
+          <div className="mb-3 text-xs font-medium uppercase tracking-[0.18em] text-[var(--accent)]">
+            Refusal Rescue · payer denial → cited appeal packet
+          </div>
+          <h1 className="serif text-balance text-[clamp(2.6rem,5vw,4.4rem)] font-light leading-[1.02] tracking-[-0.02em] text-[var(--ink-1)]">
+            Read the denial.
             <br />
             Win the{" "}
             <span className="relative inline-block italic" style={{ color: "var(--accent)" }}>
-              case
+              appeal
             </span>
             .
           </h1>
@@ -400,13 +429,14 @@ function Landing({
                 {p.label}
               </span>
             ))}
-            <span className="text-[15px] text-[var(--ink-2)]">— from a paragraph of facts.</span>
+            <span className="text-[15px] text-[var(--ink-2)]">— from the denial letter.</span>
           </div>
 
           <p className="mt-6 max-w-md text-[15px] leading-relaxed text-[var(--ink-2)]">
-            Drop an arrangement, a CID, a breach, an ED transfer. A team of agents reads everything,
-            finds every statute, safe harbor and OIG opinion, and structures the work product so the
-            government never asks the question. Federal healthcare law. For counsel — not advice.
+            A payer refused the claim. Drop in the denial — Aetna, UnitedHealthcare, an ERISA plan. A
+            team of agents reads it, pulls the member's appeal rights (ERISA, ACA external review, the
+            No Surprises Act) and the payer's own policy, and builds a cited appeal packet that
+            reverses it. Federal healthcare law. For counsel — not advice.
           </p>
 
           {/* input */}
@@ -414,8 +444,9 @@ function Landing({
             <textarea
               value={input}
               onChange={(e) => setInput(e.target.value)}
-              placeholder="A hospital wants to pay referring cardiologists a fixed fee to direct its new cath lab. How do we structure it to comply with Stark and the Anti-Kickback Statute?"
-              className="h-28 w-full resize-none rounded-xl bg-transparent p-3 text-[14px] leading-relaxed text-[var(--ink-1)] outline-none placeholder:text-[var(--ink-3)]"
+              aria-label="Describe the situation for Ross to analyze"
+              placeholder="UnitedHealthcare denied our hospital's claim for a 4-day cardiac admission as 'not medically necessary,' citing MCG criteria — the patient had chest pain and elevated troponins. Build the appeal."
+              className="h-28 w-full resize-none rounded-xl bg-transparent p-3 text-[14px] leading-relaxed text-[var(--ink-1)] outline-none placeholder:text-[var(--ink-3)] focus-visible:ring-2 focus-visible:ring-[var(--accent)]"
               onKeyDown={(e) => {
                 if ((e.metaKey || e.ctrlKey) && e.key === "Enter") go(input);
               }}
@@ -469,7 +500,7 @@ function Landing({
                 <div className="mb-2 flex items-center gap-2">
                   <span
                     className="flex h-6 w-6 items-center justify-center rounded-full text-[11px] font-semibold text-white"
-                    style={{ background: p.color }}
+                    style={{ background: grad(p.color) }}
                   >
                     {i + 1}
                   </span>
@@ -509,11 +540,11 @@ function Theater({ state }: { state: ReturnType<typeof useRoss>["state"] }) {
                 <div className="relative flex items-center gap-3 rounded-lg p-2 transition-colors"
                   style={{ background: active ? "var(--panel-2)" : "transparent" }}>
                   <span
-                    className={`relative z-10 flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-[12px] font-semibold transition-all ${active ? "pulsing" : ""}`}
+                    className={`relative z-10 flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-[12px] font-semibold transition-colors ${active ? "pulsing" : ""}`}
                     style={{
-                      background: st === "idle" ? "var(--panel-2)" : a.color,
-                      color: st === "idle" ? "var(--ink-faint)" : "#fff",
-                      boxShadow: st === "idle" ? "inset 0 0 0 1px var(--line-2)" : `0 0 0 4px ${a.color}22`,
+                      background: st === "idle" ? `${a.color}1f` : grad(a.color),
+                      color: st === "idle" ? a.color : "#fff",
+                      boxShadow: st === "idle" ? `inset 0 0 0 1px ${a.color}55` : `0 0 0 4px ${a.color}22`,
                     }}
                   >
                     {st === "done" ? "✓" : st === "reject" ? "↻" : i + 1}
@@ -708,7 +739,7 @@ function Observability({
           const tg = tags(ev);
           return (
             <div key={i} className="flex gap-2 whitespace-pre-wrap">
-              <span className="shrink-0 text-[var(--ink-faint)]">{dt.padStart(6)}s</span>
+              <span className="shrink-0 tabnum text-[var(--ink-faint)]">{dt.padStart(6)}s</span>
               <span className="shrink-0" style={{ color: sev(ev), width: 96 }}>
                 {(AGENT_NAME[ev.agent] ?? ev.agent).toLowerCase()}
               </span>
@@ -830,8 +861,9 @@ function FollowUp({
               setQ("");
             }
           }}
+          aria-label="Ask Ross a follow-up or add facts to re-analyze"
           placeholder="Answer a question, add facts, or ask a follow-up — Ross re-analyzes with the new context"
-          className="mono min-w-0 flex-1 rounded-lg border border-[var(--line)] bg-[var(--bg)] px-3 py-2 text-[12.5px] text-[var(--ink)] outline-none focus:border-[var(--ross)]"
+          className="mono min-w-0 flex-1 rounded-lg border border-[var(--line)] bg-[var(--bg)] px-3 py-2 text-[12.5px] text-[var(--ink)] outline-none focus:border-[var(--ross)] focus-visible:ring-2 focus-visible:ring-[var(--gold)]"
         />
         <button
           onClick={() => {

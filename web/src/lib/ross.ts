@@ -21,7 +21,13 @@ export type Issue = {
   safe_harbor?: string;
   theory?: string;
 };
-export type Authority = { doc_id: string; title: string; citation: string; url: string };
+export type Authority = {
+  doc_id: string;
+  title: string;
+  citation: string;
+  url: string;
+  kind?: "corpus" | "primary" | "payer_policy"; // provenance: corpus vs live-web
+};
 
 export type RossState = {
   running: boolean;

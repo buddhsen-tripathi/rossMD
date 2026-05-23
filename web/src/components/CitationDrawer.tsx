@@ -47,12 +47,23 @@ export function CitationDrawer({
       .finally(() => setLoading(false));
   }, [open, cite]);
 
+  // Esc closes the drawer (modal convention)
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [open, onClose]);
+
   if (!open) return null;
   return (
     <div className="fixed inset-0 z-50 flex justify-end" onClick={onClose}>
       <div className="absolute inset-0 bg-black/60" />
       <div
-        className="panel relative h-full w-[560px] max-w-[92vw] overflow-y-auto rounded-none border-l fade-up"
+        role="dialog"
+        aria-modal="true"
+        aria-label={`Source for ${cite}`}
+        className="panel relative h-full w-[560px] max-w-[92vw] overflow-y-auto overscroll-contain rounded-none border-l fade-up"
         style={{ background: "var(--panel-2)" }}
         onClick={(e) => e.stopPropagation()}
       >
@@ -64,7 +75,11 @@ export function CitationDrawer({
             <div className="mono mt-1 text-[15px] text-[var(--gold)]">{cite}</div>
             {doc?.court && <div className="mt-1 text-xs text-[var(--ink-dim)]">{doc.court}</div>}
           </div>
-          <button onClick={onClose} className="text-[var(--ink-dim)] hover:text-[var(--ink)]">
+          <button
+            onClick={onClose}
+            aria-label="Close source panel"
+            className="text-[var(--ink-dim)] hover:text-[var(--ink)]"
+          >
             ✕
           </button>
         </div>

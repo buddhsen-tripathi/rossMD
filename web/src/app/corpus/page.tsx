@@ -14,16 +14,17 @@ type GraphData = {
   links: { source: string; target: string }[];
 };
 
+// same vibrant spectrum as the agent palette (one scheme across all pages)
 const REGIME_COLOR: Record<string, string> = {
-  "Stark Law": "#e0a23e",       // gold
-  "Anti-Kickback": "#e0556b",   // coral
-  "False Claims Act": "#5aa9e6", // blue
-  HIPAA: "#4ec98a",             // green
-  EMTALA: "#a77be0",            // purple
-  "Civil Penalties": "#e8804f", // orange
-  "42 CFR Part 2": "#34c7c7",   // teal
-  Exclusion: "#8892a6",         // slate
-  "OIG Guidance": "#ecc24f",    // amber
+  "Stark Law": "#d98a4a",        // amber
+  "Anti-Kickback": "#e0556b",    // rose
+  "False Claims Act": "#4f86e8", // blue
+  HIPAA: "#3fb878",              // green
+  EMTALA: "#6d6af2",             // purple
+  "Civil Penalties": "#e0894f",  // orange
+  "42 CFR Part 2": "#2bb6bf",    // teal
+  Exclusion: "#8892a6",          // slate
+  "OIG Guidance": "#c98a2b",     // gold
   "Insurance & Payer": "#e07ba8", // pink
 };
 
@@ -92,7 +93,7 @@ export default function CorpusPage() {
               ["regimes", data.stats.regimes],
             ].map(([label, val]) => (
               <div key={label as string}>
-                <div className="serif text-2xl text-[#d4a24e]">{(val as number).toLocaleString()}</div>
+                <div className="serif tabnum text-2xl text-[#d4a24e]">{(val as number).toLocaleString()}</div>
                 <div className="text-[11px] uppercase tracking-wider text-[#6f675a]">{label}</div>
               </div>
             ))}
