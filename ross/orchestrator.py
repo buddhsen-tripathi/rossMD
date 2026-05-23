@@ -19,7 +19,7 @@ from ross import store
 from ross.agents import prompts
 from ross.embed import embed_one
 from ross.llm import LLM
-from ross.trace import emit_dd
+from ross.trace import emit_dd, flush_dd
 
 Emit = Callable[[dict], Awaitable[None]]
 HARVEY_MAX_ROUNDS = 2
@@ -179,9 +179,11 @@ class Orchestrator:
                                          if isinstance(s, dict)][:5]})
         return theory
 
-    async def adversary(self, facts, theory, research) -> dict:
+    async def adversary(self, facts, issues, research) -> dict:
         await self._event("adversary", "start", {})
-        user = json.dumps({"facts": facts, "theory": theory, "research": research})
+        # attacks the exposure (issues + research), not our exact theory — so it
+        # can run concurrently with the Strategist
+        user = json.dumps({"facts": facts, "issues": issues, "research": research})
         attacks = await self.llm.complete_json(
             agent="adversary", system=prompts.ADVERSARY, user=user,
             strong=True, temperature=0.6, max_tokens=8000)
@@ -229,8 +231,12 @@ class Orchestrator:
         bb["issues"] = await self.spot_issues(bb["facts"])
         await self._event("orchestrator", "fan_out", {"n": len(bb["issues"])})
         bb["research"] = await self.research_all(bb["issues"])
-        bb["theory"] = await self.strategize(bb["facts"], bb["issues"], bb["research"])
-        bb["adversary"] = await self.adversary(bb["facts"], bb["theory"], bb["research"])
+        # Strategist (builds the theory) and Adversary (attacks the exposure) have
+        # no dependency on each other — run them concurrently.
+        bb["theory"], bb["adversary"] = await asyncio.gather(
+            self.strategize(bb["facts"], bb["issues"], bb["research"]),
+            self.adversary(bb["facts"], bb["issues"], bb["research"]),
+        )
 
         draft = await self.draft(bb["facts"], bb["theory"], bb["research"], bb["adversary"])
         harvey = None
@@ -247,6 +253,7 @@ class Orchestrator:
         await self._persist(run_id, scenario, bb)
         await self._event("orchestrator", "run_done", {"run_id": run_id})
         await self.llm.aclose()
+        await flush_dd()  # make sure observability posts land before we return
         return bb
 
     async def _persist(self, run_id, scenario, bb):
