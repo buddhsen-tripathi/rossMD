@@ -249,7 +249,7 @@ export default function Home() {
       {!started ? (
         <Landing input={input} setInput={setInput} go={go} replayLast={replayLast} />
       ) : (
-        <div className="mx-auto grid max-w-[1500px] grid-cols-[330px_1fr_380px] gap-4 px-4 pb-10">
+        <div className="mx-auto grid max-w-[1500px] grid-cols-[330px_1fr_380px] gap-4 px-4 pt-6 pb-10">
           <Theater state={state} />
           <main className="panel flex h-[84vh] flex-col overflow-hidden">
             <Tabs
@@ -316,6 +316,14 @@ function Header({
         {running && <span className="blink text-xs text-[var(--ross)]">● working</span>}
       </div>
       <div className="flex items-center gap-4 text-xs text-[var(--ink-dim)]">
+        <a
+          href="/corpus"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-[var(--ink-dim)] hover:text-[var(--gold)]"
+        >
+          The corpus ↗
+        </a>
         {posture && (
           <span className="rounded border border-[var(--gold-dim)] px-2 py-0.5 text-[var(--gold)]">
             {posture}
@@ -517,6 +525,18 @@ function Landing({
             <span>·</span>
             <span>Work product for healthcare counsel — not advice</span>
           </div>
+
+          {/* ClickHouse pitch — the agent's memory layer */}
+          <div className="mt-6 rounded-xl border border-[var(--warm-line)] bg-[var(--panel-2,transparent)] p-4 text-[13.5px] leading-relaxed text-[var(--ink-2)]">
+            <span className="font-semibold text-[var(--accent)]">ClickHouse</span> is the agent's
+            legal memory: <span className="text-[var(--ink-1)]">vector retrieval</span>,{" "}
+            <span className="text-[var(--ink-1)]">authority graph</span>,{" "}
+            <span className="text-[var(--ink-1)]">source cache</span>, and{" "}
+            <span className="text-[var(--ink-1)]">replayable reasoning trace</span> in one system.{" "}
+            <Link href="/corpus" className="text-[var(--accent)] hover:underline">
+              See the memory →
+            </Link>
+          </div>
         </div>
       </div>
     </div>
@@ -530,7 +550,7 @@ function Theater({ state }: { state: ReturnType<typeof useRoss>["state"] }) {
         agent theater
       </div>
       <div className="relative">
-        <div className="absolute bottom-5 left-[18px] top-5 w-px bg-[var(--line)]" />
+        <div className="absolute bottom-5 left-[26px] top-5 w-px bg-[var(--line)]" />
         <div className="space-y-1">
           {PIPELINE.map((a, i) => {
             const st: AgentState = state.agents[a.key] ?? "idle";
@@ -789,7 +809,7 @@ function ActivityFeed({
       </div>
 
       <div className="relative pl-4">
-        <div className="absolute bottom-2 left-[5px] top-2 w-px bg-[var(--line)]" />
+        <div className="absolute bottom-2 left-[7px] top-2 w-px bg-[var(--line)]" />
         <div className="space-y-2.5">
           {items.map(({ ev, d }, i) => {
             const color = AGENT_COLOR[ev.agent] ?? "var(--ink-faint)";

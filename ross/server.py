@@ -199,6 +199,32 @@ def graph():
     }
 
 
+CLICKHOUSE_PITCH = ("ClickHouse is the agent's legal memory: vector retrieval, "
+                    "authority graph, source cache, and replayable reasoning "
+                    "trace in one system.")
+
+
+@app.get("/api/memory")
+def memory():
+    """ClickHouse as the agent's legal memory — live counts for its four jobs:
+    vector retrieval (chunks), authority graph (citation edges), source cache
+    (cached live-web sources), and replayable reasoning trace (runs/traces)."""
+    r = store.client().query("""
+        SELECT (SELECT count() FROM documents),
+               (SELECT count() FROM chunks),
+               (SELECT countIf(source='web') FROM documents),
+               (SELECT count() FROM runs),
+               (SELECT count() FROM traces)
+    """).result_rows[0]
+    # the authority graph (cross-references) is computed in /api/graph by parsing
+    # citation text, not stored as edges — the corpus page reads it from there.
+    return {
+        "corpus_docs": r[0], "vector_chunks": r[1], "web_sources": r[2],
+        "runs": r[3], "traces": r[4],
+        "pitch": CLICKHOUSE_PITCH,
+    }
+
+
 @app.get("/api/last-run")
 def last_run():
     """Most recent run_id — powers the one-click demo replay."""

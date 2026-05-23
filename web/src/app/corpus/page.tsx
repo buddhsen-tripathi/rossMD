@@ -34,14 +34,21 @@ function cat(n: GNode): { color: string } {
 
 const LEGEND = Object.entries(REGIME_COLOR).map(([key, color]) => ({ key, color }));
 
+type Memory = {
+  corpus_docs: number; vector_chunks: number; web_sources: number;
+  runs: number; traces: number; pitch: string;
+};
+
 export default function CorpusPage() {
   const [data, setData] = useState<GraphData | null>(null);
+  const [mem, setMem] = useState<Memory | null>(null);
   const [size, setSize] = useState({ w: 1200, h: 800 });
   const [hover, setHover] = useState<GNode | null>(null);
   const fgRef = useRef<any>(null);
 
   useEffect(() => {
     fetch(`${API}/api/graph`).then((r) => r.json()).then(setData).catch(() => {});
+    fetch(`${API}/api/memory`).then((r) => r.json()).then(setMem).catch(() => {});
     const onResize = () => setSize({ w: window.innerWidth, h: window.innerHeight });
     onResize();
     window.addEventListener("resize", onResize);
@@ -77,24 +84,27 @@ export default function CorpusPage() {
           <Link href="/" className="serif text-lg text-[#efe9df] hover:text-[#d4a24e]">
             ← Ross MD
           </Link>
-          <h1 className="serif mt-2 text-2xl text-[#efe9df]">The body of healthcare law Ross MD has read</h1>
-          <p className="mt-1 max-w-md text-[13px] text-[#a59c8c]">
-            Every node is a federal authority — a statute, a CFR section, an OIG opinion. They
-            cluster into the regimes Ross works in: Stark, Anti-Kickback, the False Claims Act,
-            HIPAA, EMTALA, and insurance/payer law — ERISA, ACA, the No Surprises Act.
+          <div className="mt-2 text-[11px] font-medium uppercase tracking-[0.18em] text-[#d4a24e]">
+            Powered by ClickHouse · the agent's legal memory
+          </div>
+          <h1 className="serif mt-1 text-2xl text-[#efe9df]">The body of healthcare law Ross MD has read</h1>
+          <p className="mt-2 max-w-lg text-[13px] leading-relaxed text-[#a59c8c]">
+            {mem?.pitch ??
+              "ClickHouse is the agent's legal memory: vector retrieval, authority graph, source cache, and replayable reasoning trace in one system."}
           </p>
         </div>
         {data && (
           <div className="pointer-events-auto flex gap-6 text-right">
             {[
-              ["authorities", data.stats.docs],
-              ["embedded passages", data.stats.chunks],
-              ["cross-references", data.stats.cross_refs],
-              ["regimes", data.stats.regimes],
-            ].map(([label, val]) => (
+              ["vector retrieval", data.stats.chunks, "passages"],
+              ["authority graph", data.stats.cross_refs, "links"],
+              ["source cache", mem?.web_sources ?? 0, "web sources"],
+              ["replayable trace", mem?.runs ?? 0, "runs"],
+            ].map(([label, val, unit]) => (
               <div key={label as string}>
                 <div className="serif tabnum text-2xl text-[#d4a24e]">{(val as number).toLocaleString()}</div>
-                <div className="text-[11px] uppercase tracking-wider text-[#6f675a]">{label}</div>
+                <div className="text-[11px] uppercase tracking-wider text-[#6f675a]">{label as string}</div>
+                <div className="text-[9.5px] uppercase tracking-wider text-[#534c40]">{unit as string}</div>
               </div>
             ))}
           </div>
