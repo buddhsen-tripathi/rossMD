@@ -1,61 +1,82 @@
-# Deploying Ross MD to DigitalOcean App Platform
+# Deploying Ross MD
 
-Two services run under one app domain:
+Two app services run behind a reverse proxy on one public origin:
 
 | Path     | Service | What it is                        |
 |----------|---------|-----------------------------------|
 | `/api/*` | `api`   | FastAPI + the agent orchestrator  |
 | `/*`     | `web`   | Next.js Agent Theater             |
 
-The browser calls the API **same-origin** at `/api/*`, so there's no separate
-API hostname to configure and no CORS surprises. ClickHouse is **external**
-(ClickHouse Cloud) — App Platform doesn't manage stateful ClickHouse.
+The browser calls the API **same-origin** at `/api/*` — no separate API host,
+no CORS. ClickHouse is **external** (ClickHouse Cloud); the app reads from it at
+runtime and does not self-ingest.
 
-## 1. Seed ClickHouse Cloud (one time, before first deploy)
+## Prerequisite: seed ClickHouse Cloud (one time)
 
-The app reads from ClickHouse at runtime but does **not** ingest. Point a local
-`.env` at your ClickHouse Cloud cluster and load the corpus once:
+Point a local `.env` at your ClickHouse Cloud cluster and load the corpus once:
 
 ```bash
-cp .env.example .env       # set CLICKHOUSE_* to your Cloud cluster, SECURE=true
+cp .env.example .env       # set CLICKHOUSE_* (SECURE=true) + OPENROUTER_API_KEY
 make db                    # create schema
 make scrape                # pull NY case law (CAP)
 make ingest                # embed + load into ClickHouse Cloud
 # optional: make statutes   (needs NIMBLE_API_KEY for verbatim statute text)
 ```
 
-## 2. Set secrets
+---
 
-`.do/app.yaml` leaves credentials blank on purpose. Set the real values as
-App-Level env vars (dashboard → Settings → App-Level Environment Variables, or
-via `doctl`):
+## Option A — docker-compose (recommended; e.g. a DigitalOcean Droplet)
 
-- **Required:** `OPENROUTER_API_KEY`, `CLICKHOUSE_HOST`, `CLICKHOUSE_PASSWORD`
-- **Optional:** `NIMBLE_API_KEY` (statute scrape + Tier-2 web fetch),
-  `COURTLISTENER_TOKEN`, `DD_API_KEY` / `DD_SITE` (observability)
+Self-contained: `api` + `web` + a Caddy reverse proxy that routes `/api/*` to
+the backend (prefix preserved) and everything else to the frontend. Runs on any
+Docker host.
 
-Non-secret ClickHouse settings (`PORT`, `USER`, `DATABASE`, `SECURE`) are
-already in the spec — adjust if your cluster differs.
+```bash
+# on the host (a DO Droplet with Docker installed):
+git clone https://github.com/buddhsen-tripathi/rossMD.git && cd rossMD
+cp .env.example .env        # fill in the real keys + CLICKHOUSE_* (the Cloud cluster)
+docker compose -f docker-compose.prod.yml up -d --build
+```
 
-## 3. Deploy
+- **HTTP only (IP / local):** leave `SITE_ADDRESS` unset → Caddy serves on `:80`.
+- **HTTPS (domain):** point a DNS A record at the Droplet, set
+  `SITE_ADDRESS=ross.example.com` in `.env`, and Caddy auto-provisions and
+  renews TLS. Open ports 80 and 443.
+
+Verify: `curl http://<host>/api/health` (JSON) and `curl http://<host>/` (HTML).
+
+> Verified locally end-to-end: `/` serves the Next.js app and `/api/health`
+> returns the FastAPI JSON, all through Caddy on one origin.
+
+---
+
+## Option B — DigitalOcean App Platform (PaaS, no VM to manage)
+
+App Platform does **not** run docker-compose — it builds the Dockerfiles from a
+spec. Use `.do/app.yaml` (two services: `api` at `/api` with the path prefix
+preserved, `web` at `/`).
 
 ```bash
 doctl apps create --spec .do/app.yaml
-# subsequent updates:
+# updates:
 doctl apps update <APP_ID> --spec .do/app.yaml
 ```
 
-`deploy_on_push: true` is set, so pushes to `main` redeploy automatically.
+Set secrets (`OPENROUTER_API_KEY`, `CLICKHOUSE_HOST`, `CLICKHOUSE_PASSWORD`, and
+optional `NIMBLE_API_KEY` / `COURTLISTENER_TOKEN` / `DD_API_KEY`) in the
+dashboard or via doctl — `.do/app.yaml` leaves them blank on purpose.
+`deploy_on_push: true` redeploys on every push to `main`.
 
-## Notes
+> Note: a single-service deploy (just the root `Dockerfile`) will 404 on `/`
+> because FastAPI only serves `/api/*` — you need **both** components, which is
+> why the spec defines two services.
 
-- **First boot** is slower on the `api` service: it loads the BGE embedding
-  model. The model is baked into the image at build time (no download at
-  runtime), and the health check allows a 30s startup delay.
+---
+
+## Notes (both options)
+
+- **First boot** of `api` is slower — it loads the BGE embedding model. The
+  model is baked into the image at build time (no runtime download).
 - **SSE:** the live agent feed (`/api/stream`) streams over Server-Sent Events;
-  the server already sends `X-Accel-Buffering: no` so App Platform's proxy
-  doesn't buffer it.
-- **Instance sizes:** `api` is `basic-xs` (fastembed/onnxruntime want RAM),
-  `web` is `basic-xxs`. Bump in the spec if needed.
-- **Local production-style run:** `docker compose` here is still just the local
-  ClickHouse for development; the Dockerfiles are what App Platform builds.
+  the server sends `X-Accel-Buffering: no` and Caddy streams it through.
+- **`docker-compose.yml`** (no `.prod`) remains the local-dev ClickHouse only.

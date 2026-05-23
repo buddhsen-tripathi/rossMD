@@ -1,0 +1,49 @@
+# Production stack for Ross MD — runs anywhere Docker does (e.g. a DO Droplet).
+#   docker compose -f docker-compose.prod.yml up -d --build
+#
+# Caddy is the single public entrypoint: it routes /api/* to the FastAPI
+# backend (path preserved) and everything else to the Next.js frontend, so the
+# browser talks to the API same-origin (no CORS, no API URL baked into the build).
+# ClickHouse is external (ClickHouse Cloud) — the api reads CLICKHOUSE_* from .env.
+services:
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    env_file: .env            # OPENROUTER_API_KEY, CLICKHOUSE_*, NIMBLE_API_KEY, DD_*
+    environment:
+      PORT: "8080"
+    expose:
+      - "8080"
+    restart: unless-stopped
+
+  web:
+    build:
+      context: ./web
+      dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_API: ""   # empty => browser calls /api same-origin via Caddy
+    environment:
+      PORT: "8080"
+      HOSTNAME: "0.0.0.0"
+    expose:
+      - "8080"
+    restart: unless-stopped
+
+  caddy:
+    image: caddy:2-alpine
+    depends_on:
+      - api
+      - web
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data        # persisted TLS certs
+      - caddy_config:/config
+    restart: unless-stopped
+
+volumes:
+  caddy_data:
+  caddy_config:
