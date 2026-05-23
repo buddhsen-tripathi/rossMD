@@ -76,7 +76,7 @@ open Caselaw Access Project — no token.
 
 ```bash
 cp .env.example .env        # add OPENROUTER_API_KEY; defaults point at local ClickHouse
-make bringup                # ch-up → db → scrape (CAP) → ingest (embed locally)
+make bringup                # ch-up → db → scrape-all → ingest (embed locally)
 make api                    # backend (FastAPI + SSE) on :8000
 make web                    # frontend on :3000
 ```
@@ -92,13 +92,14 @@ statute text + Tier-2 web fetch), `COURTLISTENER_TOKEN` (case-law full text),
 | Target | What it does |
 |--------|--------------|
 | `make ch-up` / `ch-down` | Start / stop local ClickHouse (Docker). |
-| `make db` | Create the ClickHouse schema. |
-| `make scrape` / `scrape-big` | Pull NY case law from CAP (citation graph, no key). |
-| `make scrape-cl` | Supplementary CourtListener metadata (needs token for full text). |
-| `make statutes` | Backfill verbatim statute text via Nimble (seed already loaded). |
+| `make db` | Create the ClickHouse schema (+ HNSW vector index). |
+| `make scrape-healthcare` | Federal healthcare statutes (LII) + regulations (eCFR), incl. insurance/payer. |
+| `make scrape-oig` | HHS OIG advisory opinions (1997–present). |
+| `make scrape-oig-guidance` | OIG Special Fraud Alerts, Advisory Bulletins, Compliance Guidance. |
+| `make scrape-all` | All of the above. |
 | `make ingest` | Embed every `data/raw/*.jsonl` doc into ClickHouse. |
 | `make api` / `make web` | Run the backend / frontend. |
-| `make bringup` | `ch-up → db → scrape → ingest` in one shot. |
+| `make bringup` | `ch-up → db → scrape-all → ingest` in one shot. |
 
 ### Try it headless
 

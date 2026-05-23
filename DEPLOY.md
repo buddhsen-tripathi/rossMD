@@ -20,10 +20,9 @@ reads from it at runtime and does not self-ingest.
 
 ```bash
 cp .env.example .env       # set CLICKHOUSE_* (SECURE=true) + OPENROUTER_API_KEY
-make db                    # create schema
-make scrape                # pull NY case law (CAP)
+make db                    # create schema (+ HNSW vector index)
+make scrape-all            # federal healthcare statutes/regs + OIG opinions + guidance
 make ingest                # embed + load into ClickHouse Cloud
-# optional: make statutes   (needs NIMBLE_API_KEY for verbatim statute text)
 ```
 
 ## 2. Deploy from the spec

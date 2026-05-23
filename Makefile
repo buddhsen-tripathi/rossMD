@@ -1,4 +1,4 @@
-.PHONY: ch-up ch-down db scrape scrape-big scrape-cl statutes ingest api web bringup demo
+.PHONY: ch-up ch-down db scrape-healthcare scrape-oig scrape-oig-guidance scrape-all ingest api web bringup
 
 # 0. local ClickHouse (no creds, no signup) — or point .env at ClickHouse Cloud
 ch-up:
@@ -8,38 +8,29 @@ ch-up:
 ch-down:
 	docker compose down
 
-# 1. create ClickHouse schema (needs CLICKHOUSE_* in .env)
+# 1. create ClickHouse schema (+ HNSW vector index)
 db:
 	uv run python -m ross.store
 
-# 2. scrape NY case law — CAP (full text + citation graph, NO key needed)
-scrape:
-	uv run python -m ross.corpus.caselaw
+# 2. corpus scrapers — federal healthcare law (no keys needed)
+scrape-healthcare:        # USC statutes (LII) + CFR regs (eCFR) incl. insurance/payer
+	uv run python -m ross.corpus.healthcare
+scrape-oig:               # HHS OIG advisory opinions 1997–present (PDF)
+	uv run python -m ross.corpus.oig
+scrape-oig-guidance:      # Special Fraud Alerts, Advisory Bulletins, Compliance Guidance
+	uv run python -m ross.corpus.oig_guidance
+scrape-all: scrape-healthcare scrape-oig scrape-oig-guidance
 
-# bigger CAP sweep (more volumes / cases)
-scrape-big:
-	uv run python -m ross.corpus.caselaw --sweep
-
-# supplementary: CourtListener metadata (needs COURTLISTENER_TOKEN for full text)
-scrape-cl:
-	uv run python -m ross.corpus.courtlistener
-
-# 3. backfill verbatim statute text (needs NIMBLE_API_KEY; seed already loaded)
-statutes:
-	uv run python -m ross.corpus.statutes
-
-# 4. embed everything in data/raw/*.jsonl into ClickHouse
+# 3. embed everything in data/raw/*.jsonl into ClickHouse (truncates + reloads)
 ingest:
 	uv run python -m ross.corpus.ingest
 
-# 5. backend API (SSE agent theater)
+# 4. backend API (SSE agent theater) / frontend
 api:
 	uv run uvicorn ross.server:app --reload --port 8000
-
-# 6. frontend
 web:
 	npm --prefix web run dev
 
 # corpus foundation in one shot (local ClickHouse)
-bringup: ch-up db scrape ingest
+bringup: ch-up db scrape-all ingest
 	@echo "✓ corpus seeded. now: make api   (and in another shell) make web"
