@@ -1,0 +1,27 @@
+# Local ClickHouse for Ross — the corpus, vector index, blackboard, audit trail.
+# `docker compose up -d` then point .env at localhost:8123 (already the default).
+services:
+  clickhouse:
+    image: clickhouse/clickhouse-server:latest
+    container_name: ross-ch
+    ports:
+      - "8123:8123"   # HTTP (clickhouse-connect)
+      - "9000:9000"   # native
+    environment:
+      CLICKHOUSE_USER: default
+      CLICKHOUSE_PASSWORD: ross_local
+      CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT: "1"
+    ulimits:
+      nofile:
+        soft: 262144
+        hard: 262144
+    volumes:
+      - ross_ch_data:/var/lib/clickhouse
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:8123/ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  ross_ch_data:
