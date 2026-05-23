@@ -16,24 +16,12 @@ const PIPELINE = [
 
 const EXAMPLES = [
   {
-    chip: "🩺 UnitedHealthcare — inpatient denied 'not medically necessary'",
+    chip: "UnitedHealthcare - inpatient denied 'not medically necessary'",
     text: "UnitedHealthcare denied our client hospital's claim for a 4-day inpatient cardiac admission as 'not medically necessary,' downgrading it to observation and citing MCG care guidelines. The patient had chest pain, elevated troponins, and a positive stress test. The plan is ERISA self-funded; we're at internal appeal with the deadline in 12 days. Build the appeal to overturn the denial.",
   },
   {
-    chip: "🧬 Aetna — therapy denied 'experimental / investigational'",
+    chip: "Aetna - therapy denied 'experimental / investigational'",
     text: "Aetna denied prior authorization for proton beam therapy for our client's pediatric CNS tumor patient as 'experimental and investigational,' citing its clinical policy bulletin. Build the appeal packet to overturn the denial and preserve external-review rights.",
-  },
-  {
-    chip: "💳 ERISA emergency out-of-network denial",
-    text: "An ERISA self-funded plan denied our client hospital's $180,000 claim for emergency out-of-network care as 'not medically necessary.' Internal appeals are exhausted. What's our move under ERISA, the No Surprises Act, and the plan's claims-procedure obligations?",
-  },
-  {
-    chip: "🏥 Stark / Anti-Kickback arrangement",
-    text: "A hospital wants to pay a 6-physician cardiology group a fixed annual fee to serve as medical directors of its new cath lab. The cardiologists refer Medicare and Medicaid patients to the hospital for cardiac procedures. Proposed pay is above the local median for the role. How do we structure this to comply with Stark and the Anti-Kickback Statute?",
-  },
-  {
-    chip: "⚖ Qui tam / DOJ investigation",
-    text: "A former billing manager filed a qui tam alleging our client, a physician group, billed Medicare for services referred under a kickback arrangement with an outside lab. DOJ just issued a Civil Investigative Demand. Build our defense.",
   },
 ];
 
@@ -322,7 +310,7 @@ function Header({
           rel="noopener noreferrer"
           className="text-[var(--ink-dim)] hover:text-[var(--gold)]"
         >
-          The corpus ↗
+          Corpus ↗
         </a>
         {posture && (
           <span className="rounded border border-[var(--gold-dim)] px-2 py-0.5 text-[var(--gold)]">
@@ -399,18 +387,15 @@ function Landing({
           <span className="text-xs text-[var(--ink-3)]">healthcare regulatory</span>
         </div>
         <div className="flex items-center gap-5 text-sm text-[var(--ink-2)]">
-          <Link href="/corpus" className="hidden hover:text-[var(--ink-1)] sm:inline">
-            The corpus
-          </Link>
           <button
             onClick={() => document.getElementById("how")?.scrollIntoView({ behavior: "smooth" })}
             className="hidden hover:text-[var(--ink-1)] sm:inline"
           >
             How it works
           </button>
-          <button onClick={replayLast} className="btn-dark px-4 py-2 text-sm font-medium">
-            See it work
-          </button>
+          <Link href="/corpus" className="btn-dark px-4 py-2 text-sm font-medium">
+            Corpus
+          </Link>
         </div>
       </nav>
 
@@ -437,18 +422,10 @@ function Landing({
                 {p.label}
               </span>
             ))}
-            <span className="text-[15px] text-[var(--ink-2)]">— from the denial letter.</span>
           </div>
 
-          <p className="mt-6 max-w-md text-[15px] leading-relaxed text-[var(--ink-2)]">
-            A payer refused the claim. Drop in the denial — Aetna, UnitedHealthcare, an ERISA plan. A
-            team of agents reads it, pulls the member's appeal rights (ERISA, ACA external review, the
-            No Surprises Act) and the payer's own policy, and builds a cited appeal packet that
-            reverses it. Federal healthcare law. For counsel — not advice.
-          </p>
-
           {/* input */}
-          <div className="landing-card mt-7 p-2">
+          <div className="landing-card mt-8 p-2">
             <textarea
               value={input}
               onChange={(e) => setInput(e.target.value)}
