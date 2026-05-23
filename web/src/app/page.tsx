@@ -286,7 +286,7 @@ function Header({
     <header className="sticky top-0 z-30 flex items-center justify-between border-b border-[var(--line)] bg-[var(--bg)]/90 px-5 py-3 backdrop-blur">
       <div className="flex items-baseline gap-3">
         <span className="serif text-xl font-semibold tracking-tight">Ross MD</span>
-        <span className="text-xs text-[var(--ink-faint)]">the pre-lawyer · healthcare regulatory</span>
+        <span className="text-xs text-[var(--ink-faint)]">healthcare regulatory</span>
         {running && <span className="blink text-xs text-[var(--ross)]">● working</span>}
       </div>
       <div className="flex items-center gap-4 text-xs text-[var(--ink-dim)]">
@@ -362,7 +362,7 @@ function Landing({
       <nav className="mx-auto flex max-w-[1180px] items-center justify-between px-6 py-6">
         <div className="flex items-baseline gap-2.5">
           <span className="serif text-xl font-semibold tracking-tight text-[var(--ink-1)]">Ross MD</span>
-          <span className="text-xs text-[var(--ink-3)]">the pre-lawyer · healthcare regulatory</span>
+          <span className="text-xs text-[var(--ink-3)]">healthcare regulatory</span>
         </div>
         <div className="flex items-center gap-5 text-sm text-[var(--ink-2)]">
           <Link href="/corpus" className="hidden hover:text-[var(--ink-1)] sm:inline">
