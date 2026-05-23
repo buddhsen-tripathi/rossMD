@@ -1,0 +1,86 @@
+# DigitalOcean App Platform spec for Ross MD.
+#
+# Two services under one public domain:
+#   /api/*  -> api service (FastAPI, path prefix preserved so FastAPI sees /api/…)
+#   /*      -> web service (Next.js); the browser calls the API same-origin at /api
+#
+# Deploy:   doctl apps create --spec .do/app.yaml
+# Update:   doctl apps update <APP_ID> --spec .do/app.yaml
+#
+# Secrets (OPENROUTER_API_KEY, CLICKHOUSE_PASSWORD, NIMBLE_API_KEY, etc.) are
+# left blank here on purpose — set their real values in the App Platform
+# dashboard (Settings -> App-Level Environment Variables) or via doctl. Do NOT
+# commit real credentials to this file.
+name: ross-md
+region: nyc
+
+services:
+  - name: api
+    dockerfile_path: Dockerfile
+    source_dir: /
+    github:
+      repo: buddhsen-tripathi/rossMD
+      branch: main
+      deploy_on_push: true
+    http_port: 8080
+    instance_count: 1
+    instance_size_slug: basic-xs        # fastembed + onnxruntime want some RAM
+    routes:
+      - path: /api
+        preserve_path_prefix: true       # FastAPI routes are /api/… — keep the prefix
+    health_check:
+      http_path: /api/health
+      initial_delay_seconds: 30          # first boot loads the embedding model
+    envs:
+      - key: OPENROUTER_API_KEY
+        scope: RUN_TIME
+        type: SECRET
+      - key: CLICKHOUSE_HOST
+        scope: RUN_TIME
+        value: "REPLACE_ME.clickhouse.cloud"
+      - key: CLICKHOUSE_PORT
+        scope: RUN_TIME
+        value: "8443"
+      - key: CLICKHOUSE_USER
+        scope: RUN_TIME
+        value: "default"
+      - key: CLICKHOUSE_PASSWORD
+        scope: RUN_TIME
+        type: SECRET
+      - key: CLICKHOUSE_DATABASE
+        scope: RUN_TIME
+        value: "ross"
+      - key: CLICKHOUSE_SECURE
+        scope: RUN_TIME
+        value: "true"
+      # optional — leave unset to disable the feature
+      - key: NIMBLE_API_KEY
+        scope: RUN_TIME
+        type: SECRET
+      - key: COURTLISTENER_TOKEN
+        scope: RUN_TIME
+        type: SECRET
+      - key: DD_API_KEY
+        scope: RUN_TIME
+        type: SECRET
+      - key: DD_SITE
+        scope: RUN_TIME
+        value: "datadoghq.com"
+
+  - name: web
+    dockerfile_path: web/Dockerfile
+    source_dir: /web
+    github:
+      repo: buddhsen-tripathi/rossMD
+      branch: main
+      deploy_on_push: true
+    http_port: 8080
+    instance_count: 1
+    instance_size_slug: basic-xxs
+    routes:
+      - path: /
+    envs:
+      # build-time, inlined into the client bundle. Empty => same-origin /api.
+      - key: NEXT_PUBLIC_API
+        scope: BUILD_TIME
+        value: ""

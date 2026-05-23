@@ -1,0 +1,10 @@
+# Frontend image build context (web/).
+node_modules
+.next
+.git
+npm-debug.log*
+*.tsbuildinfo
+next-env.d.ts
+README.md
+CLAUDE.md
+AGENTS.md

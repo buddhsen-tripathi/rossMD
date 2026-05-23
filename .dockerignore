@@ -1,0 +1,17 @@
+# Backend image build context (repo root). Keep it lean — the api image needs
+# only pyproject/uv.lock + the ross/ package.
+.git
+.venv
+__pycache__
+**/__pycache__
+*.pyc
+.env
+data
+web
+.do
+*.md
+.python-version
+Makefile
+docker-compose.yml
+run_demo.py
+main.py
