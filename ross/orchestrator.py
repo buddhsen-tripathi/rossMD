@@ -26,7 +26,7 @@ from ross.trace import emit_dd, flush_dd
 from ross.web import web_fetch
 
 Emit = Callable[[dict], Awaitable[None]]
-HARVEY_MAX_ROUNDS = 2
+HARVEY_MAX_ROUNDS = 4
 RESEARCH_K = 8
 
 # issue area → document practice-area tags to scope retrieval to that regime.
@@ -157,9 +157,11 @@ class Orchestrator:
             c = store.client()
             if not c.query("SELECT 1 FROM documents WHERE doc_id=%(d)s LIMIT 1",
                            parameters={"d": doc_id}).result_rows:
+                # always tag a practice area so the node clusters in the graph
+                # (payer policies default to the insurance/payer regime)
                 c.insert("documents",
                          [[doc_id, "web", kind, "", title, title, "", None, url, text, [],
-                           [area] if area else []]],
+                           [area or "insurance"]]],
                          column_names=DOC_COLS)
                 passages = split(text)[:12]
                 if passages:
@@ -245,6 +247,33 @@ class Orchestrator:
     async def research_all(self, issues: list[dict]) -> list[dict]:
         return await asyncio.gather(*(self.research_one(i) for i in issues))
 
+    async def fetch_cited_policy(self, facts: dict) -> dict | None:
+        """Deterministic web search: if the denial cited a payer policy, fetch it
+        live (it is NEVER in our corpus). Guarantees the web agent engages on a
+        payer-refusal matter — independent of the per-issue router's judgment —
+        and seeds the policy into ClickHouse so every researcher can retrieve it."""
+        d = facts.get("denial") or {}
+        policy = (d.get("policy_cited") or "").strip()
+        if not policy:
+            return None
+        q = " ".join(x for x in [d.get("payer", ""), policy, d.get("service_denied", ""),
+                                 "medical necessity coverage criteria"] if x)
+        await self._event("researcher", "web_search",
+                          {"cited_policy": True, "policy": policy, "queries": [q],
+                           "status": "fetching", "n": 0})
+        src = await asyncio.to_thread(web_fetch, q)
+        if not src:
+            await self._event("researcher", "web_search",
+                              {"cited_policy": True, "policy": policy, "n": 0,
+                               "note": "policy not retrievable live"})
+            return None
+        cached = await asyncio.to_thread(self._cache_web_source, src, "insurance")
+        await self._event("researcher", "web_search",
+                          {"cited_policy": True, "policy": policy, "n": 1,
+                           "sources": [{"title": cached["title"], "url": cached["url"],
+                                        "kind": cached["kind"]}]})
+        return cached
+
     async def strategize(self, facts, issues, research) -> dict:
         await self._event("strategist", "start", {})
         user = json.dumps({"facts": facts, "issues": issues, "research": research})
@@ -310,6 +339,9 @@ class Orchestrator:
 
         bb["facts"] = await self.intake(scenario)
         bb["issues"] = await self.spot_issues(bb["facts"])
+        # deterministic web search: pull the policy the denial cited (never in the
+        # corpus) up front, so every researcher can retrieve it during fan-out
+        bb["cited_policy"] = await self.fetch_cited_policy(bb["facts"])
         await self._event("orchestrator", "fan_out", {"n": len(bb["issues"])})
         bb["research"] = await self.research_all(bb["issues"])
         # Strategist (builds the theory) and Adversary (attacks the exposure) have

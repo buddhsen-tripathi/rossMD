@@ -146,6 +146,9 @@ def _xrefs(doc_id: str, text: str, docids: set) -> set:
     return {d for d in out if d in docids and d != doc_id}
 
 
+_GRAPH_CACHE: dict = {"sig": None, "data": None}
+
+
 @app.get("/api/graph")
 def graph():
     """The corpus as a regulatory map. Authorities cluster into their regime
@@ -153,15 +156,22 @@ def graph():
     cross-references (a Stark exception reg → the Stark statute; regs citing
     regs; OIG opinions → the safe harbors they interpret)."""
     c = store.client()
+    # cache the computed graph once "determined" — recompute only when the corpus
+    # changes (doc count moves: a new web source cached, or a fresh ingest)
+    sig = c.query("SELECT count() FROM documents").result_rows[0][0]
+    if _GRAPH_CACHE["sig"] == sig and _GRAPH_CACHE["data"] is not None:
+        return _GRAPH_CACHE["data"]
     rows = c.query(
-        "SELECT doc_id, citation, title, doc_type, practice_area, text FROM documents"
+        "SELECT doc_id, citation, title, doc_type, practice_area, text, source FROM documents"
     ).result_rows
     docids = {r[0] for r in rows}
 
     nodes, links, hub_deg, xdeg = [], [], {}, {}
-    for doc_id, cite, title, dtype, areas, text in rows:
+    for doc_id, cite, title, dtype, areas, text, source in rows:
+        # web=True marks live-fetched sources (Tier-2) so the UI can show the
+        # graph growing from web search, distinct from primary corpus authority
         nodes.append({"id": doc_id, "cite": cite, "title": title,
-                      "type": dtype, "regime": "", "deg": 1})
+                      "type": dtype, "regime": "", "deg": 1, "web": source == "web"})
         # regime hub (clustering + label). OIG opinions form their own cluster;
         # their links into AKS/Stark come through the real cross-references.
         regimes = ["OIG Guidance"] if doc_id.startswith("oig-") else [
@@ -192,11 +202,13 @@ def graph():
                (SELECT countIf(doc_type='statute') FROM documents),
                (SELECT countIf(doc_type='regulation') FROM documents)
     """).result_rows[0]
-    return {
+    result = {
         "stats": {"docs": st[0], "chunks": st[1], "statutes": st[2],
                   "regulations": st[3], "regimes": len(hub_deg), "cross_refs": n_xref},
         "nodes": nodes, "links": links,
     }
+    _GRAPH_CACHE["sig"], _GRAPH_CACHE["data"] = sig, result
+    return result
 
 
 CLICKHOUSE_PITCH = ("ClickHouse is the agent's legal memory: vector retrieval, "
