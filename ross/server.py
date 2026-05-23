@@ -20,7 +20,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 
 from ross import store
-from ross.config import (CH, COURTLISTENER_TOKEN, DD_API_KEY,
+from ross.config import (CH, COURTLISTENER_TOKEN, DD_API_KEY, DD_SITE,
                          NIMBLE_API_KEY, OPENROUTER_API_KEY)
 from ross.orchestrator import Orchestrator
 from ross.web import web_fetch
@@ -58,6 +58,7 @@ def health():
         "courtlistener": bool(COURTLISTENER_TOKEN),
         "nimble": bool(NIMBLE_API_KEY),
         "datadog": bool(DD_API_KEY),
+        "dd_site": DD_SITE if DD_API_KEY else "",
     }
 
 
