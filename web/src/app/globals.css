@@ -1,0 +1,142 @@
+@import "tailwindcss";
+
+:root {
+  /* warm near-black — relates to the cream landing */
+  --bg: #100d09;
+  --panel: #18140f;
+  --panel-2: #201b14;
+  --line: #2c261d;
+  --line-2: #3b3327;
+  --ink: #efe9df;
+  --ink-dim: #a59c8c;
+  --ink-faint: #6f675a;
+  --gold: #d4a24e;       /* Harvey / shared accent with landing */
+  --gold-dim: #8a6c34;
+  --ross: #5aa9e6;       /* active / research */
+  --green: #6cc98a;      /* approve / winning */
+  --red: #e0726b;        /* adversary / fatal */
+  --amber: #e0a955;
+}
+
+html, body {
+  background: var(--bg);
+  color: var(--ink);
+  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+.mono { font-family: "SF Mono", ui-monospace, "JetBrains Mono", Menlo, monospace; }
+.serif { font-family: var(--font-serif), "Fraunces", Georgia, "Times New Roman", serif; }
+
+/* ── light editorial landing ─────────────────────────────────────── */
+.landing {
+  --paper: #ece6db;
+  --paper-2: #f4efe6;
+  --warm-line: #d9d1c2;
+  --warm-line-2: #c2b6a0;
+  --ink-1: #1c1a16;
+  --ink-2: #5d574c;
+  --ink-3: #918a7c;
+  --accent: #b07b2c;
+  background:
+    radial-gradient(1200px 600px at 78% -10%, #f6f1e8 0%, transparent 60%),
+    var(--paper);
+  color: var(--ink-1);
+  min-height: 100vh;
+}
+.landing-card {
+  background: var(--paper-2);
+  border: 1px solid var(--warm-line);
+  border-radius: 16px;
+}
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.18em 0.66em;
+  border-radius: 999px;
+  background: #fff;
+  border: 1px solid var(--warm-line);
+  box-shadow: 0 2px 10px rgba(60, 50, 30, 0.07);
+  font-family: var(--font-serif), Georgia, serif;
+  white-space: nowrap;
+}
+.btn-dark {
+  background: #1c1a16;
+  color: #f4efe6;
+  border-radius: 12px;
+  transition: transform 0.15s ease, filter 0.15s ease;
+}
+.btn-dark:hover { filter: brightness(1.25); transform: translateY(-1px); }
+.btn-ghost {
+  background: transparent;
+  color: var(--ink-1);
+  border: 1px solid var(--warm-line-2);
+  border-radius: 12px;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+.btn-ghost:hover { border-color: var(--ink-1); background: rgba(0,0,0,0.02); }
+
+@keyframes float-cards {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-8px); }
+}
+@keyframes step-glow {
+  0%, 100% { box-shadow: 0 1px 0 rgba(0,0,0,0); border-color: var(--warm-line); }
+  50% { box-shadow: 0 10px 30px -12px rgba(120, 90, 40, 0.35); border-color: var(--warm-line-2); }
+}
+.fan-card {
+  position: absolute;
+  border-radius: 18px;
+  box-shadow: 0 30px 60px -20px rgba(40, 30, 15, 0.45);
+  color: #fff;
+  display: flex;
+  align-items: flex-end;
+  padding: 14px 16px;
+  font-family: var(--font-serif), Georgia, serif;
+  font-size: 13px;
+  letter-spacing: 0.02em;
+}
+
+.cite {
+  font-family: "SF Mono", ui-monospace, Menlo, monospace;
+  color: var(--ross);
+  border-bottom: 1px dashed var(--gold-dim);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.cite:hover { color: var(--gold); border-bottom-color: var(--gold); }
+
+.panel {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+}
+
+::-webkit-scrollbar { width: 9px; height: 9px; }
+::-webkit-scrollbar-thumb { background: var(--line-2); border-radius: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+
+@keyframes pulse-ring {
+  0% { box-shadow: 0 0 0 0 rgba(90,169,230,0.45); }
+  70% { box-shadow: 0 0 0 10px rgba(90,169,230,0); }
+  100% { box-shadow: 0 0 0 0 rgba(90,169,230,0); }
+}
+.pulsing { animation: pulse-ring 1.4s infinite; }
+
+@keyframes fade-up {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.fade-up { animation: fade-up 0.28s ease-out; }
+
+@keyframes blink { 50% { opacity: 0.25; } }
+.blink { animation: blink 1s steps(2) infinite; }
+
+.grid-bg {
+  background-image:
+    linear-gradient(var(--line) 1px, transparent 1px),
+    linear-gradient(90deg, var(--line) 1px, transparent 1px);
+  background-size: 28px 28px;
+  opacity: 0.25;
+}
